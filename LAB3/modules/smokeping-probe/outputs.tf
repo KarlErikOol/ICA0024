@@ -1,5 +1,5 @@
 output "instance_id" {
-  description = "ID of the probe instance, e.g. for aws ssm start-session."
+  description = "ID of the probe instance, e.g. for aws ec2 get-console-output (boot log)."
   value       = aws_instance.probe.id
 }
 
@@ -16,11 +16,6 @@ output "url" {
 output "security_group_id" {
   description = "ID of the probe's security group."
   value       = aws_security_group.probe.id
-}
-
-output "iam_role_name" {
-  description = "Name of the probe's IAM role."
-  value       = aws_iam_role.probe.name
 }
 
 output "targets_config" {

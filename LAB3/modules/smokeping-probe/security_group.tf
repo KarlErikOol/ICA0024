@@ -6,7 +6,7 @@ resource "aws_security_group" "probe" {
   name        = "${var.name}-sg"
   description = "Smokeping web UI for ${var.name} from allowed CIDRs only"
 
-  # No SSH: shell access is through SSM Session Manager.
+  # No SSH and no other shell: the probe is configured entirely at boot.
   ingress {
     description = "Smokeping web UI"
     from_port   = 80

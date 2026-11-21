@@ -1,6 +1,6 @@
 variable "name" {
   type        = string
-  description = "Prefix for every resource name, e.g. karool-lab3-estonia. Also used as the IAM role name, so it must be unique in the AWS account."
+  description = "Prefix for every resource name, e.g. karool-lab3-estonia. Make it unique per account and probe: security group names must be unique in the VPC."
 
   validation {
     condition     = can(regex("^[a-z0-9-]{3,40}$", var.name))

@@ -13,13 +13,15 @@ mock_provider "aws" {
     }
   }
 
-  # key_name is optional + computed, so a plain plan leaves it unknown. Filling
-  # computed values during plan with key_name = null means the planned value is
-  # null unless the module configures a key, which is what the test checks.
+  # key_name and iam_instance_profile are optional + computed, so a plain plan
+  # leaves them unknown. Filling computed values during plan with null means the
+  # planned value is null unless the module configures one, which is what the
+  # tests check.
   mock_resource "aws_instance" {
     override_during = plan
     defaults = {
-      key_name = null
+      key_name             = null
+      iam_instance_profile = null
     }
   }
 }
@@ -114,7 +116,7 @@ run "security_defaults" {
 
   assert {
     condition     = aws_instance.probe.key_name == null
-    error_message = "The instance must not have an SSH key pair (access is through SSM only)."
+    error_message = "The instance must not have an SSH key pair (there is no shell access)."
   }
 
   assert {
@@ -122,14 +124,11 @@ run "security_defaults" {
     error_message = "The instance must be EBS optimized."
   }
 
+  # Regression test for 2.0.0: the probe needs no AWS API access, and restricted
+  # accounts (the shared student account) can't manage instance profiles.
   assert {
-    condition     = aws_instance.probe.iam_instance_profile == "karool-lab3-test-profile"
-    error_message = "The instance must use the module's instance profile \"karool-lab3-test-profile\"."
-  }
-
-  assert {
-    condition     = aws_iam_role_policy_attachment.ssm.policy_arn == "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-    error_message = "The role must have AmazonSSMManagedInstanceCore attached so SSM Session Manager works."
+    condition     = aws_instance.probe.iam_instance_profile == null
+    error_message = "The instance must not have an IAM instance profile."
   }
 }
 
@@ -172,7 +171,7 @@ run "web_ui_only_from_allowed_cidrs" {
       for rule in aws_security_group.probe.ingress :
       !(rule.from_port <= 22 && rule.to_port >= 22) && rule.protocol != "-1"
     ])
-    error_message = "No ingress rule may open port 22 (or all ports); shell access is through SSM only."
+    error_message = "No ingress rule may open port 22 (or all ports); there is no shell access."
   }
 }
 
@@ -229,23 +228,8 @@ run "all_names_derive_from_var_name" {
   }
 
   assert {
-    condition     = startswith(aws_iam_role.probe.name, var.name)
-    error_message = "The IAM role name must start with var.name (IAM names are account-wide)."
-  }
-
-  assert {
-    condition     = startswith(aws_iam_instance_profile.probe.name, var.name)
-    error_message = "The instance profile name must start with var.name (IAM names are account-wide)."
-  }
-
-  assert {
     condition     = startswith(aws_instance.probe.tags["Name"], var.name)
     error_message = "The instance Name tag must start with var.name."
-  }
-
-  assert {
-    condition     = output.iam_role_name == aws_iam_role.probe.name
-    error_message = "The iam_role_name output must return the role's name."
   }
 }
 
@@ -267,15 +251,8 @@ run "module_tags_applied" {
   }
 
   assert {
-    condition     = aws_security_group.probe.tags["Owner"] == "karool" && aws_iam_role.probe.tags["Owner"] == "karool"
-    error_message = "The security group and IAM role must carry the caller's tags."
-  }
-
-  # Regression test for 1.0.1: tagging the instance profile needs
-  # iam:TagInstanceProfile, which the shared student account denies.
-  assert {
-    condition     = aws_iam_instance_profile.probe.tags == null
-    error_message = "The instance profile must stay untagged (iam:TagInstanceProfile is denied in restricted accounts)."
+    condition     = aws_security_group.probe.tags["Owner"] == "karool"
+    error_message = "The security group must carry the caller's tags."
   }
 
   assert {

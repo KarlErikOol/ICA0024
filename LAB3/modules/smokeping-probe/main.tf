@@ -1,6 +1,7 @@
 # One Smokeping probe: a single EC2 instance running the linuxserver/smokeping
 # container, measuring latency to var.targets. The web UI is open only to
-# var.allowed_web_cidrs and the only shell access is SSM Session Manager.
+# var.allowed_web_cidrs. There is no shell access and no IAM role: user_data
+# configures everything at first boot, and the probe never calls AWS APIs.
 
 locals {
   tags = merge(var.tags, { Module = "smokeping-probe" })
@@ -52,7 +53,6 @@ resource "aws_instance" "probe" {
   #checkov:skip=CKV_AWS_126:detailed monitoring costs extra and is not needed for a lab probe
   ami                    = local.ami_id
   instance_type          = var.instance_type
-  iam_instance_profile   = aws_iam_instance_profile.probe.name
   vpc_security_group_ids = [aws_security_group.probe.id]
   ebs_optimized          = true
   monitoring             = false
