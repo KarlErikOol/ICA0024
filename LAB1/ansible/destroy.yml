@@ -1,0 +1,49 @@
+# Remove everything infra.yml created. AMIs are kept (rebuilding takes ~10 min)
+# unless you pass -e purge_amis=true.
+- name: Tear down AWS infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Terminate servers
+      amazon.aws.ec2_instance:
+        region: "{{ aws_region }}"
+        state: absent
+        filters:
+          tag:Project: "{{ project }}"
+          instance-state-name: [pending, running, stopping, stopped]
+        wait: true
+
+    # Only possible once no instance uses it any more.
+    - name: Delete security group
+      amazon.aws.ec2_security_group:
+        region: "{{ aws_region }}"
+        name: "{{ sg_name }}"
+        state: absent
+
+    - name: Delete key pair
+      amazon.aws.ec2_key:
+        region: "{{ aws_region }}"
+        name: "{{ key_name }}"
+        state: absent
+
+    - name: Find AMIs
+      amazon.aws.ec2_ami_info:
+        region: "{{ aws_region }}"
+        owners: self
+        filters:
+          name: "{{ ami_name_prefix }}-*"
+      register: ami_info
+      when: purge_amis | default(false) | bool
+
+    - name: Deregister AMIs and delete their snapshots
+      amazon.aws.ec2_ami:
+        region: "{{ aws_region }}"
+        image_id: "{{ item.image_id }}"
+        state: absent
+        delete_snapshot: true
+      loop: "{{ ami_info.images | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: purge_amis | default(false) | bool

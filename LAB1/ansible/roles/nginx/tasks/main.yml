@@ -1,0 +1,32 @@
+- name: Install nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Hide the nginx version in headers and error pages
+  ansible.builtin.copy:
+    dest: /etc/nginx/conf.d/hardening.conf
+    content: "server_tokens off;\n"
+    mode: "0644"
+  notify: Reload nginx
+
+# nginx serves index.html before Ubuntu's index.nginx-debian.html.
+- name: Deploy index page
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: /var/www/html/index.html
+    mode: "0644"
+
+- name: Allow HTTP through ufw
+  community.general.ufw:
+    rule: allow
+    port: "80"
+    proto: tcp
+
+- name: Start and enable nginx
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true

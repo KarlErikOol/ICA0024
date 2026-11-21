@@ -1,0 +1,3 @@
+*.retry
+packer_cache/
+crash.log

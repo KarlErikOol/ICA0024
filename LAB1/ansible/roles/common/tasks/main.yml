@@ -1,0 +1,39 @@
+# Baseline for every server. Runs once at bake time (Packer) and again on every
+# deploy (site.yml), so live servers are patched and drift is corrected.
+
+- name: Upgrade all packages
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    upgrade: dist
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ common_timezone }}"
+
+- name: Harden SSH (keys only, no root login)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/10-hardening.conf
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+    mode: "0644"
+  notify: Restart ssh
+
+# Allow SSH before enabling, so the firewall never locks us out.
+- name: Allow SSH through ufw
+  community.general.ufw:
+    rule: allow
+    name: OpenSSH
+
+- name: Enable ufw, deny other incoming traffic
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming

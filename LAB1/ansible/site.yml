@@ -1,0 +1,33 @@
+# Configuration layer: runs on the servers found by the dynamic inventory.
+- name: Configure web servers
+  hosts: role_web
+  become: true
+  gather_facts: false
+
+  pre_tasks:
+    # Fresh instances need a moment before SSH answers.
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Gather facts
+      ansible.builtin.setup:
+
+  roles:
+    - common
+    - nginx
+
+  post_tasks:
+    # Prove each server works from the outside, the same way a user would.
+    - name: Check the page is reachable over HTTP
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}/"
+        return_content: true
+      register: page
+      failed_when: page.status != 200 or ansible_facts['hostname'] not in page.content
+      delegate_to: localhost
+      become: false
+
+    - name: Show URL
+      ansible.builtin.debug:
+        msg: "http://{{ ansible_host }}/ is serving {{ ansible_facts['hostname'] }}"

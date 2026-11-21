@@ -1,0 +1,88 @@
+# Infrastructure layer: key pair, security group and the servers.
+# Runs on the laptop and talks to the AWS API. Safe to re-run: every task
+# converges on the desired state instead of creating duplicates.
+- name: Provision AWS infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Find the newest base AMI built by Packer
+      amazon.aws.ec2_ami_info:
+        region: "{{ aws_region }}"
+        owners: self
+        filters:
+          name: "{{ ami_name_prefix }}-*"
+          state: available
+      register: ami_info
+
+    - name: Fail early if no AMI has been built yet
+      ansible.builtin.assert:
+        that: ami_info.images | length > 0
+        fail_msg: "No AMI named {{ ami_name_prefix }}-* found. Run scripts/build-ami.sh first."
+
+    - name: Remember the AMI id
+      ansible.builtin.set_fact:
+        ami_id: "{{ (ami_info.images | sort(attribute='creation_date') | last).image_id }}"
+
+    # AWS only receives the public half; the private key never leaves the laptop.
+    - name: Import public key into AWS
+      amazon.aws.ec2_key:
+        region: "{{ aws_region }}"
+        name: "{{ key_name }}"
+        key_material: "{{ lookup('ansible.builtin.file', key_path + '.pub') }}"
+        tags:
+          Project: "{{ project }}"
+
+    - name: Security group (SSH from admin, HTTP from anywhere)
+      amazon.aws.ec2_security_group:
+        region: "{{ aws_region }}"
+        name: "{{ sg_name }}"
+        description: "{{ project }} web servers"
+        rules:
+          - proto: tcp
+            ports: [22]
+            cidr_ip: "{{ admin_cidr }}"
+            rule_desc: SSH from admin
+          - proto: tcp
+            ports: [80]
+            cidr_ip: 0.0.0.0/0
+            rule_desc: HTTP
+        tags:
+          Project: "{{ project }}"
+
+    # exact_count makes this idempotent: with 3 running it does nothing, with 2
+    # it launches 1, with 4 it terminates 1. The filters decide which instances
+    # count; without them the module would also match on AMI id, and a new AMI
+    # would launch 3 extra servers instead of keeping the existing ones.
+    - name: Exactly {{ instance_count }} web servers
+      amazon.aws.ec2_instance:
+        region: "{{ aws_region }}"
+        name: "{{ project }}-web"
+        image_id: "{{ ami_id }}"
+        instance_type: "{{ instance_type }}"
+        key_name: "{{ key_name }}"
+        security_group: "{{ sg_name }}"
+        exact_count: "{{ instance_count | int }}"
+        filters:
+          tag:Project: "{{ project }}"
+          instance-state-name: [pending, running, stopping, stopped]
+        tags:
+          Project: "{{ project }}"
+          Role: web
+        metadata_options:
+          http_tokens: required
+        state: running
+        wait: true
+
+    - name: Look up the servers
+      amazon.aws.ec2_instance_info:
+        region: "{{ aws_region }}"
+        filters:
+          tag:Project: "{{ project }}"
+          instance-state-name: running
+      register: servers
+
+    - name: Show the servers
+      ansible.builtin.debug:
+        msg: "{{ servers.instances | map(attribute='public_ip_address') | map('regex_replace', '^', 'http://') | list }}"

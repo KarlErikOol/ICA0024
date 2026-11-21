@@ -1,0 +1,7 @@
+# Run by Packer's Ansible provisioner against the temporary build instance.
+# Whatever the common role does here is frozen into the AMI.
+- name: Bake the base image
+  hosts: all
+  become: true
+  roles:
+    - common

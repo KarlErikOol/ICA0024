@@ -1,0 +1,10 @@
+common_packages:
+  - ca-certificates
+  - curl
+  - htop
+  - unzip
+  - vim
+  - ufw
+  - unattended-upgrades
+
+common_timezone: "{{ timezone | default('UTC') }}"
