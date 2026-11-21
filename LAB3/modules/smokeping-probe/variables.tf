@@ -53,8 +53,14 @@ variable "allowed_web_cidrs" {
     error_message = "allowed_web_cidrs must contain at least one CIDR."
   }
 
+  # cidrhost() alone also accepts IPv6, which would only fail at apply time
+  # (the CIDRs go into the security group's IPv4 cidr_blocks), so also require
+  # the IPv4 shape.
   validation {
-    condition     = alltrue([for c in var.allowed_web_cidrs : can(cidrhost(c, 0))])
+    condition = alltrue([
+      for c in var.allowed_web_cidrs :
+      can(cidrhost(c, 0)) && can(regex("^[0-9]+(\\.[0-9]+){3}/[0-9]+$", c))
+    ])
     error_message = "Every allowed_web_cidrs item must be a valid IPv4 CIDR, e.g. 203.0.113.10/32."
   }
 }
