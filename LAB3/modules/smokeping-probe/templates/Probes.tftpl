@@ -1,0 +1,12 @@
+*** Probes ***
+
+# Binary paths verified against the lscr.io/linuxserver/smokeping image
+# (Alpine: fping -> /usr/sbin/fping, bind-tools -> /usr/bin/dig).
+
++ FPing
+binary = /usr/sbin/fping
+
++ DNS
+binary = /usr/bin/dig
+# default name to resolve; a target can override it with "lookup = ..."
+lookup = google.com

@@ -1,0 +1,21 @@
+*** Targets ***
+
+probe = FPing
+
+menu = Top
+title = ${title}
+
++ Targets
+menu = Targets
+title = Targets
+%{ for t in targets ~}
+
+++ ${t.name}
+menu = ${t.name}
+title = ${t.name} (${t.host})
+probe = ${t.probe}
+host = ${t.host}
+%{ if t.lookup != null ~}
+lookup = ${t.lookup}
+%{ endif ~}
+%{ endfor ~}

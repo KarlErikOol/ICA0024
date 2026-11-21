@@ -1,0 +1,36 @@
+#!/bin/bash
+# Smokeping probe bootstrap (run once by cloud-init at first boot, as root).
+# 1. Installs Docker from the Ubuntu archive.
+# 2. Writes the Terraform-rendered Smokeping Targets and Probes files to
+#    /opt/smokeping/config (the container's /config). The image only copies
+#    its defaults into /config for files that do not exist yet, so these
+#    survive container start; all other config files come from the image.
+# 3. Starts the linuxserver Smokeping container, web UI on port 80
+#    at /smokeping/smokeping.cgi.
+set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y docker.io
+systemctl enable --now docker
+
+mkdir -p /opt/smokeping/config /opt/smokeping/data
+
+cat > /opt/smokeping/config/Targets <<'SMOKEPING_TARGETS_EOF'
+${targets_config}
+SMOKEPING_TARGETS_EOF
+
+cat > /opt/smokeping/config/Probes <<'SMOKEPING_PROBES_EOF'
+${probes_config}
+SMOKEPING_PROBES_EOF
+
+docker run -d \
+  --name smokeping \
+  --restart unless-stopped \
+  -p 80:80 \
+  -e TZ='${timezone}' \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -v /opt/smokeping/config:/config \
+  -v /opt/smokeping/data:/data \
+  lscr.io/linuxserver/smokeping:2.9.0-r0-ls190
