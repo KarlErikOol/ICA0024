@@ -12,13 +12,13 @@ no shell access and needs no AWS API access.
 
 ```hcl
 module "probe_estonia" {
-  source            = "git::https://github.com/KarlErikOol/ICA0024.git//LAB3/modules/smokeping-probe?ref=lab3-v2.0.0"
+  source            = "git::https://github.com/KarlErikOol/ICA0024.git//LAB3/modules/smokeping-probe?ref=lab3-v3.0.0"
   name              = "karool-lab3-estonia"
   allowed_web_cidrs = ["203.0.113.10/32"]
-  targets = [
-    { name = "taltech", host = "www.taltech.ee" },
-    { name = "dns_cloudflare", host = "1.1.1.1", probe = "DNS", lookup = "taltech.ee" },
-  ]
+  targets = {
+    taltech        = { host = "www.taltech.ee" }
+    dns_cloudflare = { host = "1.1.1.1", probe = "DNS", lookup = "taltech.ee" }
+  }
   # alert_email = "you@example.com" # optional, see Alerts
 }
 ```
@@ -34,7 +34,7 @@ the caller's AWS provider, in that region's default VPC and default subnet.
 | Name | Type | Default | Description |
 |---|---|---|---|
 | `name` | `string` | required | Prefix for every resource name, e.g. `karool-lab3-estonia`. Must be unique in the AWS account and region. 3–40 characters: lowercase letters, digits and hyphens. |
-| `targets` | `list(object)`, see below | required | Hosts to measure. At least one. Names must be unique. |
+| `targets` | `map(object)` keyed by name, see below | required | Hosts to measure. At least one. Names are map keys, so they are unique by construction. |
 | `allowed_web_cidrs` | `list(string)` | required | IPv4 CIDRs allowed to open the web UI on port 80. At least one, and each must be a valid CIDR (e.g. `203.0.113.10/32`). There is no default, so the UI is never public by accident. |
 | `instance_type` | `string` | `"t3.micro"` | EC2 instance type for the probe. |
 | `ami_id` | `string` | `null` | AMI for the probe. `null` uses the latest Canonical Ubuntu 24.04 (amd64) in the provider's region. If set, it must look like `ami-0123456789abcdef0`. |
@@ -42,11 +42,11 @@ the caller's AWS provider, in that region's default VPC and default subnet.
 | `tags` | `map(string)` | `{}` | Extra tags merged into every resource. |
 | `alert_email` | `string` | `null` | Email address that gets an alert when the instance fails its EC2 status checks. `null` turns alerting off. If set, it must look like an email address. See [Alerts](#alerts). |
 
-Fields of each `targets` item:
+Each `targets` key is the Smokeping section name and menu label: letters,
+digits and underscores only (no dots, spaces or hyphens). Fields of each value:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `name` | `string` | required | Smokeping section name and menu label. Letters, digits and underscores only (no dots, spaces or hyphens). |
 | `host` | `string` | required | Hostname or IP address to measure. |
 | `probe` | `string` | `"FPing"` | `"FPing"` (ICMP ping) or `"DNS"` (DNS query sent to `host`). Case-sensitive. |
 | `lookup` | `string` | `null` | Name the DNS probe asks `host` to resolve. Required when `probe = "DNS"`, ignored otherwise. |
@@ -81,14 +81,14 @@ Consumers can't change these, so they can't get them wrong:
 
 ## Adding a target
 
-Add an item to the `targets` list. The module code never changes, and new
+Add an entry to the `targets` map. The module code never changes, and new
 targets need no new code (open–closed principle):
 
 ```hcl
-targets = [
-  { name = "taltech", host = "www.taltech.ee" },
-  { name = "github", host = "github.com" }, # new
-]
+targets = {
+  taltech = { host = "www.taltech.ee" }
+  github  = { host = "github.com" } # new
+}
 ```
 
 The Smokeping config is written to disk only at first boot (user_data), so the
