@@ -5,6 +5,24 @@ All notable changes to the `smokeping-probe` module. The format follows
 [Semantic Versioning](https://semver.org/), and each version is released as the
 git tag `lab3-vX.Y.Z`.
 
+## [2.1.0] - 2026-11-21
+
+### Added
+
+- Optional email alerting when the probe instance fails its EC2 status checks,
+  turned on with the new `alert_email` input (default `null`, validated as a
+  plausible email address). When it is set, the module creates an SNS topic
+  `<name>-alerts` (encrypted with the AWS-managed key `alias/aws/sns`), an email
+  subscription to `alert_email`, and a CloudWatch alarm `<name>-status-check` on
+  `AWS/EC2` `StatusCheckFailed` (maximum over 60 s, 3 periods in a row) that
+  notifies the topic on both ALARM and OK.
+- Output `alert_topic_arn`: the ARN of the SNS topic, or `null` when alerting is
+  off.
+- AWS first sends a confirmation email to `alert_email`. Alerts arrive only after
+  the link in it is clicked; until then the subscription stays pending.
+- Backwards compatible: with the default `alert_email = null` the module creates
+  nothing new, so existing callers only need to bump `?ref=` to `lab3-v2.1.0`.
+
 ## [2.0.0] - 2026-11-21
 
 ### Removed
