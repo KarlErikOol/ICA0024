@@ -7,6 +7,11 @@
   gather_facts: false
 
   tasks:
+    - name: Require an environment
+      ansible.builtin.assert:
+        that: env_name is defined
+        fail_msg: "No environment selected. Use: ansible-playbook -i inventories/<env> infra.yml"
+
     - name: Find the newest base AMI built by Packer
       amazon.aws.ec2_ami_info:
         region: "{{ aws_region }}"
@@ -33,12 +38,13 @@
         key_material: "{{ lookup('ansible.builtin.file', key_path + '.pub') }}"
         tags:
           Project: "{{ project }}"
+          Environment: "{{ env_name }}"
 
     - name: Security group (SSH from admin, HTTP from anywhere)
       amazon.aws.ec2_security_group:
         region: "{{ aws_region }}"
         name: "{{ sg_name }}"
-        description: "{{ project }} web servers"
+        description: "{{ name_prefix }} web servers"
         rules:
           - proto: tcp
             ports: [22]
@@ -50,15 +56,17 @@
             rule_desc: HTTP
         tags:
           Project: "{{ project }}"
+          Environment: "{{ env_name }}"
 
     # exact_count makes this idempotent: with 3 running it does nothing, with 2
     # it launches 1, with 4 it terminates 1. The filters decide which instances
-    # count; without them the module would also match on AMI id, and a new AMI
-    # would launch 3 extra servers instead of keeping the existing ones.
-    - name: Exactly {{ instance_count }} web servers
+    # count: only this project + environment, so dev never touches prod. Without
+    # them the module would also match on AMI id, and a new AMI would launch 3
+    # extra servers instead of keeping the existing ones.
+    - name: Exactly {{ instance_count }} {{ env_name }} web servers
       amazon.aws.ec2_instance:
         region: "{{ aws_region }}"
-        name: "{{ project }}-web"
+        name: "{{ name_prefix }}-web"
         image_id: "{{ ami_id }}"
         instance_type: "{{ instance_type }}"
         key_name: "{{ key_name }}"
@@ -66,9 +74,11 @@
         exact_count: "{{ instance_count | int }}"
         filters:
           tag:Project: "{{ project }}"
+          tag:Environment: "{{ env_name }}"
           instance-state-name: [pending, running, stopping, stopped]
         tags:
           Project: "{{ project }}"
+          Environment: "{{ env_name }}"
           Role: web
         metadata_options:
           http_tokens: required
@@ -80,6 +90,7 @@
         region: "{{ aws_region }}"
         filters:
           tag:Project: "{{ project }}"
+          tag:Environment: "{{ env_name }}"
           instance-state-name: running
       register: servers
 

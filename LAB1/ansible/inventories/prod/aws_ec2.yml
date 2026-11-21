@@ -1,13 +1,14 @@
-# Dynamic inventory: asks AWS for running instances tagged Project=iac-lab1,
-# so no IP address is ever written down. Check it with:
-#   ansible-inventory --graph
+# Dynamic inventory for PROD: asks AWS for running instances tagged
+# Project=iac-lab1 and Environment=prod, so no IP address is ever written down.
+#   ansible-inventory -i inventories/prod --graph
 plugin: amazon.aws.aws_ec2
 regions:
   - eu-north-1
 filters:
   tag:Project: iac-lab1
+  tag:Environment: prod
   instance-state-name: running
-# All three share Name=iac-lab1-web, so add the instance id: iac-lab1-web-i-0abc...
+# All servers share a Name tag, so add the instance id: iac-lab1-prod-web-i-0abc...
 hostnames:
   - name: instance-id
     prefix: tag:Name

@@ -1,17 +1,24 @@
-# Remove everything infra.yml created. AMIs are kept (rebuilding takes ~10 min)
-# unless you pass -e purge_amis=true.
+# Remove everything infra.yml created for ONE environment; the other keeps
+# running. The shared AMI is kept (rebuilding takes ~5 min) unless you pass
+# -e purge_amis=true, which is refused while any environment still has servers.
 - name: Tear down AWS infrastructure
   hosts: localhost
   connection: local
   gather_facts: false
 
   tasks:
-    - name: Terminate servers
+    - name: Require an environment
+      ansible.builtin.assert:
+        that: env_name is defined
+        fail_msg: "No environment selected. Use: ansible-playbook -i inventories/<env> destroy.yml"
+
+    - name: Terminate {{ env_name }} servers
       amazon.aws.ec2_instance:
         region: "{{ aws_region }}"
         state: absent
         filters:
           tag:Project: "{{ project }}"
+          tag:Environment: "{{ env_name }}"
           instance-state-name: [pending, running, stopping, stopped]
         wait: true
 
@@ -27,6 +34,24 @@
         region: "{{ aws_region }}"
         name: "{{ key_name }}"
         state: absent
+
+    # The AMI is shared, so only delete it once no environment needs it.
+    - name: Look for servers in other environments
+      amazon.aws.ec2_instance_info:
+        region: "{{ aws_region }}"
+        filters:
+          tag:Project: "{{ project }}"
+          instance-state-name: [pending, running, stopping, stopped]
+      register: remaining
+      when: purge_amis | default(false) | bool
+
+    - name: Refuse to delete the AMI while it is still in use
+      ansible.builtin.assert:
+        that: remaining.instances | length == 0
+        fail_msg: >-
+          Servers still exist ({{ remaining.instances | map(attribute='tags.Environment', default='untagged') | unique | join(', ') }}).
+          Destroy those environments first.
+      when: purge_amis | default(false) | bool
 
     - name: Find AMIs
       amazon.aws.ec2_ami_info:

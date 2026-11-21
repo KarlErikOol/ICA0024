@@ -12,6 +12,7 @@
   <h1>{{ nginx_page_title }}</h1>
   <p>Configured by Ansible from the Packer-built AMI.</p>
   <table>
+    <tr><th>Environment</th><td>{{ env_name | default('n/a') }}</td></tr>
     <tr><th>Hostname</th><td>{{ ansible_facts['hostname'] }}</td></tr>
     <tr><th>Instance ID</th><td>{{ aws_instance_id | default('n/a') }}</td></tr>
     <tr><th>AMI</th><td>{{ aws_image_id | default('n/a') }}</td></tr>

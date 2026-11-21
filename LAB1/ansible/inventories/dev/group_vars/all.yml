@@ -1,0 +1,5 @@
+# DEV: small and disposable. Together with the Environment filter in
+# aws_ec2.yml, this is everything that makes dev different from prod.
+env_name: dev
+instance_type: t3.micro
+instance_count: 3

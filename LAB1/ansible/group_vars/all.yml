@@ -1,17 +1,23 @@
-# One place for every setting the playbooks share.
+# Settings shared by every environment.
+#
+# Per-environment values (env_name, instance_type, instance_count) live in
+# inventories/<env>/group_vars/all.yml. Don't set them here as well: these
+# playbook-level group_vars take precedence over inventory group_vars, so a
+# value here would silently override the environment's.
 project: iac-lab1
 aws_region: eu-north-1
 
-instance_type: t3.micro
-instance_count: 3
-
+# One AMI for every environment: built once, used by dev and prod alike.
 # Packer names images "<ami_name_prefix>-<timestamp>"; infra.yml picks the newest.
 ami_name_prefix: "{{ project }}-base"
 
-key_name: "{{ project }}"
+# Every AWS resource name includes the environment, so dev and prod never collide.
+name_prefix: "{{ project }}-{{ env_name }}"
+key_name: "{{ name_prefix }}"
+sg_name: "{{ name_prefix }}-sg"
+
 # Existing personal key; infra.yml uploads the .pub half to AWS.
 key_path: "{{ lookup('ansible.builtin.env', 'HOME') }}/.ssh/id_ed25519"
-sg_name: "{{ project }}-sg"
 
 # Who may SSH in. scripts/deploy.sh overrides this with your current public /32.
 admin_cidr: 0.0.0.0/0

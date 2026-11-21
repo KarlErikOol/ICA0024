@@ -1,8 +1,9 @@
 # ICA0024 Lab 1: Packer + Ansible on AWS
 
-Three Ubuntu 24.04 web servers in AWS `eu-north-1`. Packer builds one hardened
-base image, and Ansible creates the AWS resources and configures the servers.
-Each server serves a page showing its own hostname, instance ID and AZ.
+Ubuntu 24.04 web servers in AWS `eu-north-1`, in two environments (dev and
+prod). Packer builds one hardened base image, and Ansible creates the AWS
+resources and configures the servers. Each server serves a page showing its
+environment, hostname, instance ID and AZ.
 
 ## Architecture
 
@@ -10,44 +11,64 @@ Each server serves a page showing its own hostname, instance ID and AZ.
 flowchart LR
     laptop["Laptop<br/>scripts/*.sh"]
 
-    subgraph build["1. build-ami.sh"]
+    subgraph build["1. build-ami.sh (once)"]
         packer["Packer<br/>amazon-ebs"]
         bake["Ansible<br/>bake.yml → role common"]
         packer -->|provisioner| bake
     end
 
-    subgraph aws["AWS eu-north-1 (default VPC)"]
-        ami[("AMI<br/>iac-lab1-base-&lt;timestamp&gt;")]
-        sg["Security group<br/>22 ← admin /32<br/>80 ← anywhere"]
-        ec2a["EC2 t3.micro<br/>nginx"]
-        ec2b["EC2 t3.micro<br/>nginx"]
-        ec2c["EC2 t3.micro<br/>nginx"]
+    ami[("AMI<br/>iac-lab1-base-&lt;timestamp&gt;")]
+
+    subgraph deploy["2. deploy.sh &lt;env&gt;"]
+        inv["inventories/&lt;env&gt;<br/>aws_ec2.yml + group_vars"]
+        infra["infra.yml<br/>key pair, SG, exact_count"]
+        site["site.yml<br/>roles common + nginx"]
     end
 
-    subgraph deploy["2. deploy.sh"]
-        infra["Ansible infra.yml<br/>key pair, SG, exact_count: 3"]
-        site["Ansible site.yml<br/>roles common + nginx"]
-        inv["Dynamic inventory<br/>aws_ec2, tag Project=iac-lab1"]
+    subgraph aws["AWS eu-north-1 (default VPC)"]
+        subgraph dev["Environment=dev"]
+            d["3× EC2 t3.micro, nginx<br/>SG iac-lab1-dev-sg"]
+        end
+        subgraph prod["Environment=prod"]
+            p["3× EC2 t3.small, nginx<br/>SG iac-lab1-prod-sg"]
+        end
     end
 
     laptop --> packer
     bake -->|snapshot| ami
     laptop --> infra
-    infra -->|launch from newest AMI| ec2a & ec2b & ec2c
-    infra --> sg
-    inv -.->|discovers| ec2a & ec2b & ec2c
-    site --> inv
-    site -->|SSH| ec2a & ec2b & ec2c
+    inv -.->|vars + discovery| infra & site
+    ami -->|same image| d & p
+    infra -->|launch| d & p
+    site -->|SSH| d & p
 ```
-
-Two layers, both in Ansible:
 
 | Layer | File | Runs on | Does |
 |---|---|---|---|
 | Image | `packer/base.pkr.hcl` → `ansible/bake.yml` | temporary build instance | apt upgrade, base packages, timezone, SSH hardening, ufw |
-| Infra | `ansible/infra.yml` | localhost → AWS API | SSH key, security group, exactly 3 instances |
-| Config | `ansible/site.yml` | the 3 servers | `common` again (patches + drift), `nginx`, HTTP check |
-| Teardown | `ansible/destroy.yml` | localhost → AWS API | terminate instances, delete SG and key (and optionally the AMIs) |
+| Infra | `ansible/infra.yml` | localhost → AWS API | SSH key, security group, exactly N instances for one environment |
+| Config | `ansible/site.yml` | that environment's servers | `common` again (patches + drift), `nginx`, HTTP check |
+| Teardown | `ansible/destroy.yml` | localhost → AWS API | terminate one environment's instances, delete its SG and key (optionally the AMI) |
+
+## Environments
+
+dev and prod run the same playbooks, roles and AMI. They differ only in their
+inventory directory:
+
+| | `inventories/dev/` | `inventories/prod/` |
+|---|---|---|
+| `aws_ec2.yml` | finds instances tagged `Environment=dev` | `Environment=prod` |
+| `group_vars/all.yml` | `t3.micro` × 3 | `t3.small` × 3 |
+
+Every AWS resource name includes the environment (`iac-lab1-dev-sg`,
+`iac-lab1-prod-sg`, ...) and every resource is tagged `Environment`, so deploying
+or destroying one environment never touches the other.
+
+Shared settings stay in `ansible/group_vars/all.yml`. Per-environment values
+must **not** be set there as well: playbook-level `group_vars` take precedence
+over inventory `group_vars`, so a value there would silently override the
+environment's. Adding a third environment is a copy of `inventories/dev/`
+with two values changed.
 
 ## Prerequisites
 
@@ -70,10 +91,11 @@ Two layers, both in Ansible:
 ## Usage
 
 ```sh
-./scripts/build-ami.sh   # ~10 min: bake the AMI
-./scripts/deploy.sh      # create/update the 3 servers and configure them
-./scripts/destroy.sh     # remove instances, SG and key pair
-./scripts/destroy.sh -e purge_amis=true   # ...and the AMIs + snapshots
+./scripts/build-ami.sh        # ~5 min: bake the AMI (shared by all environments)
+./scripts/deploy.sh dev       # create/update dev and configure it
+./scripts/deploy.sh prod      # same for prod
+./scripts/destroy.sh dev      # remove dev only; prod keeps running
+./scripts/destroy.sh prod -e purge_amis=true   # ...and the AMI, once no environment uses it
 ```
 
 `deploy.sh` ends by fetching `http://<ip>/` from each server and checking that the
@@ -83,54 +105,66 @@ Handy checks:
 
 ```sh
 cd ansible
-ansible-inventory --graph              # what the dynamic inventory sees
-ansible role_web -m ping
+ansible-inventory -i inventories/dev --graph    # what the dynamic inventory sees
+ansible -i inventories/dev role_web -m ping
 curl http://<public-ip>/
-ssh ubuntu@<public-ip>                 # uses ~/.ssh/id_ed25519
+ssh ubuntu@<public-ip>                          # uses ~/.ssh/id_ed25519
 ```
 
 ## Design notes
 
 - **Idempotent.** Running `deploy.sh` again reports almost nothing as changed
-  (only things like package updates released since the last run). `exact_count: 3`
-  counts instances by tag: if one is terminated by hand, the next run launches one
-  replacement; if `instance_count` changes in `group_vars/all.yml`, the fleet
-  grows or shrinks to match.
+  (only things like package updates released since the last run). `exact_count`
+  counts the instances of one project and environment by tag: if one is
+  terminated by hand, the next run launches one replacement; if
+  `instance_count` changes, the fleet grows or shrinks to match.
 - **No hard-coded IPs.** The `aws_ec2` inventory plugin finds running instances
-  tagged `Project=iac-lab1` and groups them by their `Role` tag (`role_web`).
+  by their `Project` and `Environment` tags and groups them by their `Role`
+  tag (`role_web`).
+- **No default environment.** `ansible.cfg` sets no inventory, the scripts
+  require `dev` or `prod`, and the playbooks refuse to run without one.
+- **One image, promoted.** Packer builds the AMI once, and dev and prod both
+  launch from the newest one. The AMI can only be purged once no environment has
+  servers left.
 - **Same role at bake time and deploy time.** `common` is frozen into the AMI, so new
   servers boot already patched. It also runs on every deploy to apply later updates and undo drift.
 - **SSH key stays local.** `infra.yml` imports the public half of
-  `~/.ssh/id_ed25519` as the `iac-lab1` key pair; the private key never leaves the
-  laptop. Change `key_path` in `group_vars/all.yml` to use a different key.
+  `~/.ssh/id_ed25519` as the `iac-lab1-<env>` key pair; the private key never
+  leaves the laptop. Change `key_path` in `group_vars/all.yml` to use a different key.
 - **Locked down.** SSH only from the deployer's current IP (`deploy.sh`
   detects it), key-only auth, no root login, ufw allowing just 22/80, IMDSv2
   required, nginx version hidden.
 - **New AMI → new servers.** Existing instances are not replaced when a new AMI
-  is built. To roll them, run `destroy.sh` then `deploy.sh`. That full cycle also
-  proves the stack can be rebuilt from scratch.
+  is built. To roll an environment, run `destroy.sh <env>` then `deploy.sh <env>`.
+  That full cycle also proves the stack can be rebuilt from scratch.
 
 ## Layout
 
 ```
 LAB1/
 ├── packer/
-│   ├── base.pkr.hcl          # amazon-ebs source + ansible provisioner
+│   ├── base.pkr.hcl              # amazon-ebs source + ansible provisioner
 │   └── variables.pkr.hcl
 ├── ansible/
 │   ├── ansible.cfg
-│   ├── inventory/aws_ec2.yml # dynamic inventory
-│   ├── group_vars/all.yml    # region, instance type/count, names
+│   ├── inventories/
+│   │   ├── dev/
+│   │   │   ├── aws_ec2.yml       # dynamic inventory, Environment=dev
+│   │   │   └── group_vars/all.yml  # instance type/count for dev
+│   │   └── prod/
+│   │       ├── aws_ec2.yml
+│   │       └── group_vars/all.yml
+│   ├── group_vars/all.yml        # shared: region, names, AMI prefix
 │   ├── requirements.yml
-│   ├── bake.yml              # Packer → role common
-│   ├── infra.yml             # key, SG, 3× EC2
-│   ├── site.yml              # roles common + nginx, HTTP check
+│   ├── bake.yml                  # Packer → role common
+│   ├── infra.yml                 # key, SG, N× EC2 for one environment
+│   ├── site.yml                  # roles common + nginx, HTTP check
 │   ├── destroy.yml
 │   └── roles/
-│       ├── common/           # apt upgrade, packages, timezone, SSH, ufw
-│       └── nginx/            # nginx + templated index page
+│       ├── common/               # apt upgrade, packages, timezone, SSH, ufw
+│       └── nginx/                # nginx + templated index page
 └── scripts/
     ├── build-ami.sh
-    ├── deploy.sh
-    └── destroy.sh
+    ├── deploy.sh                 # deploy.sh dev|prod
+    └── destroy.sh                # destroy.sh dev|prod
 ```
