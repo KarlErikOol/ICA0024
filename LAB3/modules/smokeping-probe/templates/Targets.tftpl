@@ -8,11 +8,11 @@ title = ${title}
 + Targets
 menu = Targets
 title = Targets
-%{ for t in targets ~}
+%{ for name, t in targets ~}
 
-++ ${t.name}
-menu = ${t.name}
-title = ${t.name} (${t.host})
+++ ${name}
+menu = ${name}
+title = ${name} (${t.host})
 probe = ${t.probe}
 host = ${t.host}
 %{ if t.lookup != null ~}

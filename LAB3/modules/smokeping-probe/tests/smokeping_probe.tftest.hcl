@@ -29,11 +29,11 @@ mock_provider "aws" {
 variables {
   name              = "karool-lab3-test"
   allowed_web_cidrs = ["203.0.113.10/32"]
-  targets = [
-    { name = "cloudflare", host = "1.1.1.1" },
-    { name = "google_dns", host = "8.8.8.8" },
-    { name = "dns_cloudflare", host = "1.1.1.1", probe = "DNS", lookup = "taltech.ee" },
-  ]
+  targets = {
+    cloudflare     = { host = "1.1.1.1" }
+    google_dns     = { host = "8.8.8.8" }
+    dns_cloudflare = { host = "1.1.1.1", probe = "DNS", lookup = "taltech.ee" }
+  }
 }
 
 # --- rendering ---------------------------------------------------------------
@@ -267,7 +267,7 @@ run "rejects_empty_targets" {
   command = plan
 
   variables {
-    targets = []
+    targets = {}
   }
 
   expect_failures = [var.targets]
@@ -277,7 +277,7 @@ run "rejects_unknown_probe" {
   command = plan
 
   variables {
-    targets = [{ name = "taltech", host = "www.taltech.ee", probe = "HTTP" }]
+    targets = { taltech = { host = "www.taltech.ee", probe = "HTTP" } }
   }
 
   expect_failures = [var.targets]
@@ -287,7 +287,7 @@ run "rejects_dns_target_without_lookup" {
   command = plan
 
   variables {
-    targets = [{ name = "dns_cloudflare", host = "1.1.1.1", probe = "DNS" }]
+    targets = { dns_cloudflare = { host = "1.1.1.1", probe = "DNS" } }
   }
 
   expect_failures = [var.targets]
@@ -297,20 +297,7 @@ run "rejects_target_name_with_dot" {
   command = plan
 
   variables {
-    targets = [{ name = "www.taltech", host = "www.taltech.ee" }]
-  }
-
-  expect_failures = [var.targets]
-}
-
-run "rejects_duplicate_target_names" {
-  command = plan
-
-  variables {
-    targets = [
-      { name = "cloudflare", host = "1.1.1.1" },
-      { name = "cloudflare", host = "1.0.0.1" },
-    ]
+    targets = { "www.taltech" = { host = "www.taltech.ee" } }
   }
 
   expect_failures = [var.targets]

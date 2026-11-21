@@ -9,13 +9,14 @@ variable "name" {
 }
 
 variable "targets" {
-  type = list(object({
-    name   = string
+  # A map keyed by target name: keys are unique by construction, so duplicate
+  # names can't happen (in 2.x they needed a validation rule).
+  type = map(object({
     host   = string
     probe  = optional(string, "FPing")
     lookup = optional(string)
   }))
-  description = "Hosts to measure. name becomes the Smokeping section name, probe is FPing (ICMP) or DNS, and lookup is the record a DNS probe asks the host for."
+  description = "Hosts to measure, keyed by name. The key becomes the Smokeping section name, probe is FPing (ICMP) or DNS, and lookup is the record a DNS probe asks the host for."
 
   validation {
     condition     = length(var.targets) >= 1
@@ -23,24 +24,19 @@ variable "targets" {
   }
 
   validation {
-    condition     = alltrue([for t in var.targets : contains(["FPing", "DNS"], t.probe)])
+    condition     = alltrue([for t in values(var.targets) : contains(["FPing", "DNS"], t.probe)])
     error_message = "Every target probe must be \"FPing\" or \"DNS\"."
   }
 
   # Smokeping section names may not contain dots, spaces or hyphens.
   validation {
-    condition     = alltrue([for t in var.targets : can(regex("^[A-Za-z0-9_]+$", t.name))])
+    condition     = alltrue([for name in keys(var.targets) : can(regex("^[A-Za-z0-9_]+$", name))])
     error_message = "Every target name may only contain letters, digits and underscores (Smokeping section names)."
   }
 
   validation {
-    condition     = alltrue([for t in var.targets : t.probe != "DNS" || t.lookup != null])
+    condition     = alltrue([for t in values(var.targets) : t.probe != "DNS" || t.lookup != null])
     error_message = "Every target with probe = \"DNS\" needs a lookup (the name to resolve)."
-  }
-
-  validation {
-    condition     = length(distinct([for t in var.targets : t.name])) == length(var.targets)
-    error_message = "Target names must be unique."
   }
 }
 
