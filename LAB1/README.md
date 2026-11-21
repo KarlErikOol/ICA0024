@@ -78,11 +78,17 @@ with two values changed.
   - portal / start URL: `aws configure sso`, then `aws sso login --profile <your-profile>`
     at the start of each session
   - check with `aws sts get-caller-identity`. If that fails, nothing else will work.
+- **Linux or macOS shell.** Ansible can't run natively on Windows, so use WSL there.
 - **SSH key** `~/.ssh/id_ed25519` (create one with `ssh-keygen -t ed25519` if missing).
-- **Packer** ≥ 1.9: `brew tap hashicorp/tap && brew install hashicorp/tap/packer`
-- **Ansible** with `boto3`/`botocore` in Ansible's own Python. Homebrew's
-  `ansible` already includes them; with a pip install, run `pip install boto3 botocore`
-  in the same environment.
+- **AWS CLI v2**: [install guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+- **Packer** ≥ 1.9: [install guide](https://developer.hashicorp.com/packer/install)
+  (HashiCorp's apt/dnf repository, a zip download, or a package manager)
+- **Ansible** with `boto3` and `botocore` in the same Python environment, e.g.:
+  ```sh
+  pipx install --include-deps ansible
+  pipx inject ansible boto3 botocore
+  ```
+  or `python3 -m pip install --user ansible boto3 botocore`.
 - Collections:
   ```sh
   ansible-galaxy collection install -r ansible/requirements.yml
