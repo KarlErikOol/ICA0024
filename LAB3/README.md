@@ -112,7 +112,7 @@ workflows, and again before every release.
 | `terraform validate` | Syntax and types: wrong references, argument names, variable types (module and `infra/`) |
 | `tflint` | Provider mistakes: invalid instance types, deprecated syntax, unused declarations |
 | `checkov` | Security policy: open ingress, unencrypted disks, IMDSv1, ... |
-| `terraform test` | Module behaviour: 20 runs against a mocked AWS provider, no AWS credentials |
+| `terraform test` | Module behaviour: 21 runs against a mocked AWS provider, no AWS credentials |
 
 Four checkov findings are skipped inline, each with its reason in the code:
 
@@ -157,6 +157,7 @@ same repository.
 | `lab3-v1.0.1` | Instance profile no longer tagged: the student account denies `iam:TagInstanceProfile`, so 1.0.0 failed to apply | patch (bug fix, same interface) |
 | `lab3-v2.0.0` | IAM role / instance profile / SSM and `iam_role_name` output removed: the student account denies managing instance profiles, and the probe never needed AWS access | major (output removed, no shell) |
 | `lab3-v2.1.0` | Optional `alert_email`: SNS topic + email subscription + CloudWatch `StatusCheckFailed` alarm, created only when set | minor (new optional feature, backwards compatible) |
+| `lab3-v2.1.1` | `allowed_web_cidrs` rejects IPv6 during validation instead of failing at apply | patch (bug fix, same interface) |
 
 ## Consuming and upgrading
 

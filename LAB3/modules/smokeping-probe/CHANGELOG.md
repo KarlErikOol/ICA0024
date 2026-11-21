@@ -5,6 +5,15 @@ All notable changes to the `smokeping-probe` module. The format follows
 [Semantic Versioning](https://semver.org/), and each version is released as the
 git tag `lab3-vX.Y.Z`.
 
+## [2.1.1] - 2026-11-21
+
+### Fixed
+
+- `allowed_web_cidrs` now rejects IPv6 CIDRs during validation. They used to
+  pass (`cidrhost()` accepts both families) and then failed only at apply time,
+  because the CIDRs go into the security group's IPv4 `cidr_blocks`. No change
+  for valid IPv4 input.
+
 ## [2.1.0] - 2026-11-21
 
 ### Added
