@@ -346,6 +346,18 @@ run "rejects_non_cidr_string" {
   expect_failures = [var.allowed_web_cidrs]
 }
 
+# Regression test for 2.1.1: cidrhost() also accepts IPv6, which then failed
+# only at apply time because the CIDRs go into the IPv4 cidr_blocks.
+run "rejects_ipv6_cidr" {
+  command = plan
+
+  variables {
+    allowed_web_cidrs = ["2001:db8::/32"]
+  }
+
+  expect_failures = [var.allowed_web_cidrs]
+}
+
 run "rejects_empty_allowed_web_cidrs" {
   command = plan
 
