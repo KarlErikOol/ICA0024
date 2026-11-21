@@ -45,3 +45,12 @@ variable "global_targets" {
     { name = "dns_google_github", host = "8.8.8.8", probe = "DNS", lookup = "github.com" },
   ]
 }
+
+# Placeholder on purpose: example.com is reserved for documentation, so nobody
+# receives the confirmation email and the subscription stays pending. It still
+# shows the alert resources being created. Set null to turn alerts off.
+variable "alert_email" {
+  type        = string
+  default     = "alerts@example.com"
+  description = "Where status-check alerts go (passed to both probes); null disables them."
+}
