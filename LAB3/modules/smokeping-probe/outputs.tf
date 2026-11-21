@@ -22,3 +22,8 @@ output "iam_role_name" {
   description = "Name of the probe's IAM role."
   value       = aws_iam_role.probe.name
 }
+
+output "targets_config" {
+  description = "Rendered Smokeping Targets file."
+  value       = local.targets_config
+}

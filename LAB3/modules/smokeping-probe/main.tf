@@ -11,6 +11,18 @@ locals {
   # follows if the image's path changes.
   web_path = "/smokeping/smokeping.cgi"
 
+  targets_config = templatefile("${path.module}/templates/Targets.tftpl", {
+    title   = "Latency from ${var.name}"
+    targets = var.targets
+  })
+
+  probes_config = templatefile("${path.module}/templates/Probes.tftpl", {})
+
+  user_data = templatefile("${path.module}/templates/user_data.sh.tftpl", {
+    targets_config = local.targets_config
+    probes_config  = local.probes_config
+    timezone       = var.timezone
+  })
 }
 
 # --- ami -------------------------------------------------------------------
@@ -44,6 +56,11 @@ resource "aws_instance" "probe" {
   vpc_security_group_ids = [aws_security_group.probe.id]
   ebs_optimized          = true
   monitoring             = false
+
+  user_data = local.user_data
+  # The config is only written at first boot, so a config change must
+  # replace the instance to take effect.
+  user_data_replace_on_change = true
 
   metadata_options {
     http_endpoint = "enabled"
