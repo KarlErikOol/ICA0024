@@ -2,6 +2,7 @@
 
 resource "aws_security_group" "probe" {
   #checkov:skip=CKV_AWS_382:probes need ICMP/DNS to arbitrary targets and docker pulls images
+  #checkov:skip=CKV_AWS_260:ingress CIDRs come from the required allowed_web_cidrs input (no default, validated); checkov cannot resolve it and assumes 0.0.0.0/0
   name        = "${var.name}-sg"
   description = "Smokeping web UI for ${var.name} from allowed CIDRs only"
 
