@@ -114,13 +114,14 @@ workflows, and again before every release.
 | `checkov` | Security policy: open ingress, unencrypted disks, IMDSv1, ... |
 | `terraform test` | Module behaviour: 17 runs against a mocked AWS provider, no AWS credentials |
 
-Three checkov findings are skipped inline, each with its reason in the code:
+Four checkov findings are skipped inline, each with its reason in the code:
 
 | Check | Why it's skipped |
 |---|---|
 | `CKV_AWS_126` detailed monitoring | Costs extra and isn't needed for a lab probe |
 | `CKV_AWS_382` unrestricted egress | Probes reach arbitrary targets; `apt` and `docker pull` need the internet |
 | `CKV_AWS_260` port 80 open to the world | The CIDRs come from a required, validated input that checkov can't resolve, so it assumes `0.0.0.0/0` |
+| `CKV2_AWS_41` no IAM role on the instance | The probe calls no AWS APIs, and the student account can't manage instance profiles (see 2.0.0) |
 
 Run the same checks locally with `./scripts/check.sh` (needs `terraform`,
 [`tflint`](https://github.com/terraform-linters/tflint#installation) and

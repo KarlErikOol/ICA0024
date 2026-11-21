@@ -51,6 +51,7 @@ data "aws_ami" "ubuntu" {
 # probe needs outbound internet for apt, docker pulls and the probes.
 resource "aws_instance" "probe" {
   #checkov:skip=CKV_AWS_126:detailed monitoring costs extra and is not needed for a lab probe
+  #checkov:skip=CKV2_AWS_41:the probe calls no AWS APIs, so it needs no role; restricted accounts cannot manage instance profiles (see CHANGELOG 2.0.0)
   ami                    = local.ami_id
   instance_type          = var.instance_type
   vpc_security_group_ids = [aws_security_group.probe.id]
