@@ -86,7 +86,7 @@ Full details (types, defaults, validation, outputs) are in the
 | `instance_type` | EC2 type, default `t3.micro` |
 | `ami_id` | Pin an AMI; default `null` looks up the latest Ubuntu 24.04 |
 | `timezone` | Time zone for graph timestamps, default `Europe/Tallinn` |
-| `tags` | Extra tags merged into every resource |
+| `tags` | Extra tags merged into every resource (except the instance profile) |
 
 **Open–closed principle.** `targets` is the single extension point: the module
 is open for extension (a new target is a new list item in the consumer) and
@@ -152,6 +152,7 @@ same repository.
 | Tag | Change | Bump |
 |---|---|---|
 | `lab3-v1.0.0` | First release | major (first stable interface) |
+| `lab3-v1.0.1` | Instance profile no longer tagged: the student account denies `iam:TagInstanceProfile`, so 1.0.0 failed to apply | patch (bug fix, same interface) |
 
 ## Consuming and upgrading
 
@@ -215,7 +216,8 @@ regional tagging query).
 
 - **Safe in a shared account.** The TalTech AWS account is shared with other
   students, so every name starts with `karool-` and every resource is tagged
-  `Owner` and `Project`.
+  `Owner` and `Project`. The one exception is the instance profile, which is
+  name-only because the account denies `iam:TagInstanceProfile` (fixed in 1.0.1).
 - **AMI lookup in the module.** AMI IDs differ per region and change with every
   Ubuntu release, so a hard-coded ID would break elsewhere and go stale. Later
   AMI changes are ignored, so a new Ubuntu image never replaces a running probe

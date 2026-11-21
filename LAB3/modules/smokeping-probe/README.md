@@ -75,7 +75,9 @@ Consumers can't change these, so they can't get them wrong:
   `<name>-role` and the instance profile `<name>-profile`. The instance and its
   volume are tagged `Name = <name>`. In a shared AWS account, a unique `name`
   per student and per probe is all you need to avoid collisions.
-- **Tags.** Every resource gets `var.tags` merged with `Module = "smokeping-probe"`.
+- **Tags.** Every resource gets `var.tags` merged with `Module = "smokeping-probe"`,
+  except the instance profile. Tagging that needs `iam:TagInstanceProfile`,
+  which restricted accounts deny, so it is identified by its name instead.
 
 ## Adding a target
 
