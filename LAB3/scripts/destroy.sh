@@ -12,7 +12,7 @@ terraform destroy -var "admin_cidr=${admin_cidr}" "$@"
 
 cat <<'EOF'
 
-To confirm nothing is left (expect an empty list, then NoSuchEntity):
+To confirm nothing is left (expect two empty lists):
   aws resourcegroupstaggingapi get-resources --tag-filters Key=Owner,Values=karool Key=Project,Values=karool-lab3 --region eu-north-1
-  aws iam get-role --role-name karool-lab3-estonia-role
+  aws ec2 describe-security-groups --filters 'Name=group-name,Values=karool-lab3-*' --query 'SecurityGroups[].GroupName' --region eu-north-1
 EOF

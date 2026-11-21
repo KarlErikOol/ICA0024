@@ -17,9 +17,9 @@ cat <<EOF
 Estonia probe: $(terraform output -raw estonia_url)
 Global probe:  $(terraform output -raw global_url)
 
-Shell access (SSM, no SSH):
-  aws ssm start-session --target $(terraform output -raw estonia_instance_id) --region eu-north-1
-  aws ssm start-session --target $(terraform output -raw global_instance_id) --region eu-north-1
+Boot log (no shell on the probes):
+  aws ec2 get-console-output --instance-id $(terraform output -raw estonia_instance_id) --latest --region eu-north-1 --output text
+  aws ec2 get-console-output --instance-id $(terraform output -raw global_instance_id) --latest --region eu-north-1 --output text
 
 Smokeping measures every 5 minutes; give it a few rounds before graphs appear.
 If your IP changes, run this script again: it updates the security group in place.
