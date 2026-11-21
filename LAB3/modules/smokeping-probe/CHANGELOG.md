@@ -5,6 +5,29 @@ All notable changes to the `smokeping-probe` module. The format follows
 [Semantic Versioning](https://semver.org/), and each version is released as the
 git tag `lab3-vX.Y.Z`.
 
+## [2.0.0] - 2026-11-21
+
+### Removed
+
+- The IAM role `<name>-role`, its `AmazonSSMManagedInstanceCore` policy
+  attachment, the instance profile `<name>-profile` and the `iam_role_name`
+  output. They existed only to give a person a shell through SSM Session
+  Manager, and that can't work in the shared TalTech student account: 1.0.0
+  failed because `iam:TagInstanceProfile` is denied, and 1.0.1 then failed
+  because `iam:GetInstanceProfile` is denied as well, so a role can't be
+  attached to a profile there. Smokeping never needed it: user_data writes the
+  config and starts the container at first boot, so the probe needs no shell and
+  no AWS API access. There is still no key pair and no port 22.
+- The tagging exception for the instance profile. Every resource now gets
+  `var.tags` merged with `Module = "smokeping-probe"`.
+
+### Migration
+
+- Remove any use of `module.<name>.iam_role_name`. There is no shell on the
+  probe anymore; use `aws ec2 get-console-output` to read the boot log. Bump
+  `?ref=` to `lab3-v2.0.0`, run `terraform init -upgrade`; the plan destroys the
+  role and policy attachment and creates nothing new for IAM.
+
 ## [1.0.1] - 2026-11-21
 
 ### Fixed
