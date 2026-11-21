@@ -1,0 +1,89 @@
+variable "name" {
+  type        = string
+  description = "Prefix for every resource name, e.g. karool-lab3-estonia. Also used as the IAM role name, so it must be unique in the AWS account."
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]{3,40}$", var.name))
+    error_message = "name must be 3-40 characters of lowercase letters, digits and hyphens."
+  }
+}
+
+variable "targets" {
+  type = list(object({
+    name   = string
+    host   = string
+    probe  = optional(string, "FPing")
+    lookup = optional(string)
+  }))
+  description = "Hosts to measure. name becomes the Smokeping section name, probe is FPing (ICMP) or DNS, and lookup is the record a DNS probe asks the host for."
+
+  validation {
+    condition     = length(var.targets) >= 1
+    error_message = "targets must contain at least one target."
+  }
+
+  validation {
+    condition     = alltrue([for t in var.targets : contains(["FPing", "DNS"], t.probe)])
+    error_message = "Every target probe must be \"FPing\" or \"DNS\"."
+  }
+
+  # Smokeping section names may not contain dots, spaces or hyphens.
+  validation {
+    condition     = alltrue([for t in var.targets : can(regex("^[A-Za-z0-9_]+$", t.name))])
+    error_message = "Every target name may only contain letters, digits and underscores (Smokeping section names)."
+  }
+
+  validation {
+    condition     = alltrue([for t in var.targets : t.probe != "DNS" || t.lookup != null])
+    error_message = "Every target with probe = \"DNS\" needs a lookup (the name to resolve)."
+  }
+
+  validation {
+    condition     = length(distinct([for t in var.targets : t.name])) == length(var.targets)
+    error_message = "Target names must be unique."
+  }
+}
+
+variable "allowed_web_cidrs" {
+  type        = list(string)
+  description = "IPv4 CIDRs allowed to open the Smokeping web UI on port 80. No default, so the UI is never public by accident."
+
+  validation {
+    condition     = length(var.allowed_web_cidrs) >= 1
+    error_message = "allowed_web_cidrs must contain at least one CIDR."
+  }
+
+  validation {
+    condition     = alltrue([for c in var.allowed_web_cidrs : can(cidrhost(c, 0))])
+    error_message = "Every allowed_web_cidrs item must be a valid IPv4 CIDR, e.g. 203.0.113.10/32."
+  }
+}
+
+variable "instance_type" {
+  type        = string
+  description = "EC2 instance type for the probe."
+  default     = "t3.micro"
+}
+
+variable "ami_id" {
+  type        = string
+  description = "AMI for the probe. null means the latest Canonical Ubuntu 24.04 in the provider's region."
+  default     = null
+
+  validation {
+    condition     = var.ami_id == null ? true : can(regex("^ami-[0-9a-f]+$", var.ami_id))
+    error_message = "ami_id must be null or look like ami-0123456789abcdef0."
+  }
+}
+
+variable "timezone" {
+  type        = string
+  description = "Time zone for the Smokeping container (TZ), used for graph timestamps."
+  default     = "Europe/Tallinn"
+}
+
+variable "tags" {
+  type        = map(string)
+  description = "Extra tags merged into every resource."
+  default     = {}
+}

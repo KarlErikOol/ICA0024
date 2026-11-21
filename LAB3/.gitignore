@@ -1,0 +1,13 @@
+# Terraform working files and local state (state holds resource details;
+# never commit it). infra/.terraform.lock.hcl IS committed: it pins providers.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+
+# A module doesn't pin providers; its consumers do.
+modules/smokeping-probe/.terraform.lock.hcl
+
+# Personal values such as alert_email: the repo is public.
+infra/terraform.tfvars
