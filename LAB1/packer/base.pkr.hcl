@@ -1,6 +1,6 @@
-# Base image: latest Ubuntu 24.04 from Canonical + the Ansible "common" role.
+# Base image: latest Ubuntu 24.04 from Canonical + the Ansible roles common and nginx.
 # Packer launches a temporary instance, runs ../ansible/bake.yml on it,
-# snapshots it as iac-lab1-base-<timestamp> and terminates it.
+# snapshots it as karool-lab1-base-<timestamp> and terminates it.
 
 packer {
   required_plugins {

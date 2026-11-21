@@ -12,6 +12,15 @@
         that: env_name is defined
         fail_msg: "No environment selected. Use: ansible-playbook -i inventories/<env> destroy.yml"
 
+    - name: Refuse to delete anything not named {{ owner_prefix }}*
+      ansible.builtin.assert:
+        that:
+          - project is match(owner_prefix)
+          - sg_name is match(owner_prefix)
+          - key_name is match(owner_prefix)
+          - ami_name_prefix is match(owner_prefix)
+        fail_msg: "Every name must start with {{ owner_prefix }} (see group_vars/all.yml)."
+
     - name: Terminate {{ env_name }} servers
       amazon.aws.ec2_instance:
         region: "{{ aws_region }}"
@@ -56,9 +65,10 @@
     - name: Find AMIs
       amazon.aws.ec2_ami_info:
         region: "{{ aws_region }}"
-        owners: self
+        owners: self # the whole shared account, hence the tag filter too
         filters:
           name: "{{ ami_name_prefix }}-*"
+          tag:Project: "{{ project }}"
       register: ami_info
       when: purge_amis | default(false) | bool
 

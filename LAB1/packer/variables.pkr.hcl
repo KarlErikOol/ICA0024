@@ -1,6 +1,6 @@
 variable "project" {
   type    = string
-  default = "iac-lab1"
+  default = "karool-lab1"
 }
 
 variable "region" {

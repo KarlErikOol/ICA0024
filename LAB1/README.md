@@ -13,11 +13,11 @@ flowchart LR
 
     subgraph build["1. build-ami.sh (once)"]
         packer["Packer<br/>amazon-ebs"]
-        bake["Ansible<br/>bake.yml → role common"]
+        bake["Ansible<br/>bake.yml → roles common + nginx"]
         packer -->|provisioner| bake
     end
 
-    ami[("AMI<br/>iac-lab1-base-&lt;timestamp&gt;")]
+    ami[("AMI<br/>karool-lab1-base-&lt;timestamp&gt;")]
 
     subgraph deploy["2. deploy.sh &lt;env&gt;"]
         inv["inventories/&lt;env&gt;<br/>aws_ec2.yml + group_vars"]
@@ -27,10 +27,10 @@ flowchart LR
 
     subgraph aws["AWS eu-north-1 (default VPC)"]
         subgraph dev["Environment=dev"]
-            d["3× EC2 t3.micro, nginx<br/>SG iac-lab1-dev-sg"]
+            d["3× EC2 t3.micro, nginx<br/>SG karool-lab1-dev-sg"]
         end
         subgraph prod["Environment=prod"]
-            p["3× EC2 t3.small, nginx<br/>SG iac-lab1-prod-sg"]
+            p["3× EC2 t3.small, nginx<br/>SG karool-lab1-prod-sg"]
         end
     end
 
@@ -45,7 +45,7 @@ flowchart LR
 
 | Layer | File | Runs on | Does |
 |---|---|---|---|
-| Image | `packer/base.pkr.hcl` → `ansible/bake.yml` | temporary build instance | apt upgrade, base packages, timezone, SSH hardening, ufw |
+| Image | `packer/base.pkr.hcl` → `ansible/bake.yml` | temporary build instance | roles `common` (apt upgrade, base packages, timezone, SSH hardening, ufw) and `nginx` |
 | Infra | `ansible/infra.yml` | localhost → AWS API | SSH key, security group, exactly N instances for one environment |
 | Config | `ansible/site.yml` | that environment's servers | `common` again (patches + drift), `nginx`, HTTP check |
 | Teardown | `ansible/destroy.yml` | localhost → AWS API | terminate one environment's instances, delete its SG and key (optionally the AMI) |
@@ -60,8 +60,8 @@ inventory directory:
 | `aws_ec2.yml` | finds instances tagged `Environment=dev` | `Environment=prod` |
 | `group_vars/all.yml` | `t3.micro` × 3 | `t3.small` × 3 |
 
-Every AWS resource name includes the environment (`iac-lab1-dev-sg`,
-`iac-lab1-prod-sg`, ...) and every resource is tagged `Environment`, so deploying
+Every AWS resource name includes the environment (`karool-lab1-dev-sg`,
+`karool-lab1-prod-sg`, ...) and every resource is tagged `Environment`, so deploying
 or destroying one environment never touches the other.
 
 Shared settings stay in `ansible/group_vars/all.yml`. Per-environment values
@@ -132,14 +132,18 @@ ssh ubuntu@<public-ip>                          # uses ~/.ssh/id_ed25519
 - **One image, promoted.** Packer builds the AMI once, and dev and prod both
   launch from the newest one. The AMI can only be purged once no environment has
   servers left.
-- **Same role at bake time and deploy time.** `common` is frozen into the AMI, so new
-  servers boot already patched. It also runs on every deploy to apply later updates and undo drift.
+- **Same roles at bake time and deploy time.** `common` and `nginx` are frozen into the AMI, so new
+  servers boot patched and already serving. Both also run on every deploy to apply later updates and undo drift.
 - **SSH key stays local.** `infra.yml` imports the public half of
-  `~/.ssh/id_ed25519` as the `iac-lab1-<env>` key pair; the private key never
+  `~/.ssh/id_ed25519` as the `karool-lab1-<env>` key pair; the private key never
   leaves the laptop. Change `key_path` in `group_vars/all.yml` to use a different key.
 - **Locked down.** SSH only from the deployer's current IP (`deploy.sh`
   detects it), key-only auth, no root login, ufw allowing just 22/80, IMDSv2
   required, nginx version hidden.
+- **Safe in a shared account.** The TalTech AWS account is shared with other
+  students. Every resource is named and tagged `karool-lab1-*`, all lookups and
+  deletions filter on that name or tag, and `infra.yml` / `destroy.yml` refuse to
+  run if any name they act on doesn't start with `owner_prefix` (`karool-`).
 - **New AMI → new servers.** Existing instances are not replaced when a new AMI
   is built. To roll an environment, run `destroy.sh <env>` then `deploy.sh <env>`.
   That full cycle also proves the stack can be rebuilt from scratch.
@@ -162,7 +166,7 @@ LAB1/
 │   │       └── group_vars/all.yml
 │   ├── group_vars/all.yml        # shared: region, names, AMI prefix
 │   ├── requirements.yml
-│   ├── bake.yml                  # Packer → role common
+│   ├── bake.yml                  # Packer → roles common + nginx
 │   ├── infra.yml                 # key, SG, N× EC2 for one environment
 │   ├── site.yml                  # roles common + nginx, HTTP check
 │   ├── destroy.yml

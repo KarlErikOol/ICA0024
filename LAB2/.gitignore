@@ -1,0 +1,8 @@
+# Terraform working files and local state (state holds resource details;
+# never commit it). .terraform.lock.hcl IS committed: it pins provider versions.
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfstate.d/
+*.tfplan
+crash.log

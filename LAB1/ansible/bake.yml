@@ -1,7 +1,9 @@
 # Run by Packer's Ansible provisioner against the temporary build instance.
-# Whatever the common role does here is frozen into the AMI.
+# Whatever these roles do here is frozen into the AMI, so servers launched by
+# an auto-scaling group (Lab 2) boot ready to serve without any Ansible run.
 - name: Bake the base image
   hosts: all
   become: true
   roles:
     - common
+    - nginx

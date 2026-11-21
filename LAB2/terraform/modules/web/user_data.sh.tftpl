@@ -1,0 +1,35 @@
+#!/bin/bash
+# Runs once at first boot. nginx is already in the AMI (Lab 1); this only
+# replaces the page with one naming this instance, read from IMDSv2.
+# Terraform's templatefile() fills in the environment name; the rest is plain shell.
+set -euo pipefail
+
+token=$(curl -sf -X PUT http://169.254.169.254/latest/api/token \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+md() { curl -sf -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/meta-data/$1"; }
+
+cat > /var/www/html/index.html <<EOF
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ICA0024 Lab 2 - $(md instance-id)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; }
+    th { text-align: left; padding-right: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>ICA0024 Lab 2</h1>
+  <p>Served by an auto-scaling group behind an Application Load Balancer.</p>
+  <table>
+    <tr><th>Environment</th><td>${env}</td></tr>
+    <tr><th>Instance ID</th><td>$(md instance-id)</td></tr>
+    <tr><th>Availability zone</th><td>$(md placement/availability-zone)</td></tr>
+    <tr><th>AMI</th><td>$(md ami-id)</td></tr>
+    <tr><th>Instance type</th><td>$(md instance-type)</td></tr>
+    <tr><th>Private IP</th><td>$(md local-ipv4)</td></tr>
+  </table>
+</body>
+</html>
+EOF

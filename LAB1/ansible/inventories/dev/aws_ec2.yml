@@ -1,14 +1,14 @@
 # Dynamic inventory for DEV: asks AWS for running instances tagged
-# Project=iac-lab1 and Environment=dev, so no IP address is ever written down.
+# Project=karool-lab1 and Environment=dev, so no IP address is ever written down.
 #   ansible-inventory -i inventories/dev --graph
 plugin: amazon.aws.aws_ec2
 regions:
   - eu-north-1
 filters:
-  tag:Project: iac-lab1
+  tag:Project: karool-lab1
   tag:Environment: dev
   instance-state-name: running
-# All servers share a Name tag, so add the instance id: iac-lab1-dev-web-i-0abc...
+# All servers share a Name tag, so add the instance id: karool-lab1-dev-web-i-0abc...
 hostnames:
   - name: instance-id
     prefix: tag:Name

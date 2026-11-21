@@ -4,8 +4,13 @@
 # inventories/<env>/group_vars/all.yml. Don't set them here as well: these
 # playbook-level group_vars take precedence over inventory group_vars, so a
 # value here would silently override the environment's.
-project: iac-lab1
+project: karool-lab1
 aws_region: eu-north-1
+
+# The AWS account is shared with other students. Everything this project
+# creates is named and tagged karool-*, and infra.yml / destroy.yml refuse to
+# run if any name they act on doesn't start with this prefix.
+owner_prefix: karool-
 
 # One AMI for every environment: built once, used by dev and prod alike.
 # Packer names images "<ami_name_prefix>-<timestamp>"; infra.yml picks the newest.
