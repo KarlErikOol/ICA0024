@@ -5,6 +5,38 @@ All notable changes to the `smokeping-probe` module. The format follows
 [Semantic Versioning](https://semver.org/), and each version is released as the
 git tag `lab3-vX.Y.Z`.
 
+## [3.0.0] - 2026-11-21
+
+### Changed
+
+- **Breaking:** `targets` is now a `map(object)` keyed by target name instead of
+  a `list(object)` with a `name` field. Map keys are unique by construction, so
+  duplicate names can no longer be expressed (2.x needed a validation rule for
+  that, which is removed). Targets are rendered in key order.
+
+### Migration
+
+- Turn each list item into a map entry, using its `name` as the key:
+
+  ```hcl
+  # 2.x
+  targets = [
+    { name = "taltech", host = "www.taltech.ee" },
+    { name = "dns_cloudflare", host = "1.1.1.1", probe = "DNS", lookup = "taltech.ee" },
+  ]
+
+  # 3.0.0
+  targets = {
+    taltech        = { host = "www.taltech.ee" }
+    dns_cloudflare = { host = "1.1.1.1", probe = "DNS", lookup = "taltech.ee" }
+  }
+  ```
+
+- Bump `?ref=` to `lab3-v3.0.0` and run `terraform init -upgrade`. If the
+  rendered target order changes, the config changes, so the instance is
+  replaced and graph history restarts. Stay on `lab3-v2.1.1` until that suits
+  you; 2.x keeps working.
+
 ## [2.1.1] - 2026-11-21
 
 ### Fixed
