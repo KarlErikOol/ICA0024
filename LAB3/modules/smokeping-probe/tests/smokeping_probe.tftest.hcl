@@ -365,3 +365,101 @@ run "rejects_malformed_ami_id" {
 
   expect_failures = [var.ami_id]
 }
+
+# --- alerts --------------------------------------------------------------------
+
+# ARNs and the instance ID are only known after apply, so the alarm's
+# dimensions/actions and output.alert_topic_arn (when enabled) can't be asserted
+# in a mocked plan. The tests check what is known at plan time.
+
+run "alerts_disabled_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(aws_sns_topic.alerts) == 0
+    error_message = "No SNS topic may be created when alert_email is null."
+  }
+
+  assert {
+    condition     = length(aws_sns_topic_subscription.email) == 0
+    error_message = "No SNS subscription may be created when alert_email is null."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.status_check) == 0
+    error_message = "No CloudWatch alarm may be created when alert_email is null."
+  }
+
+  assert {
+    condition     = output.alert_topic_arn == null
+    error_message = "alert_topic_arn must be null when alerting is disabled."
+  }
+}
+
+run "alerts_enabled_with_email" {
+  command = plan
+
+  variables {
+    alert_email = "alerts@example.com"
+  }
+
+  assert {
+    condition     = length(aws_sns_topic.alerts) == 1
+    error_message = "Exactly one SNS topic must be created when alert_email is set."
+  }
+
+  assert {
+    condition     = length(aws_sns_topic_subscription.email) == 1
+    error_message = "Exactly one SNS subscription must be created when alert_email is set."
+  }
+
+  assert {
+    condition     = length(aws_cloudwatch_metric_alarm.status_check) == 1
+    error_message = "Exactly one CloudWatch alarm must be created when alert_email is set."
+  }
+
+  assert {
+    condition     = aws_sns_topic_subscription.email[0].protocol == "email"
+    error_message = "The SNS subscription must use the email protocol."
+  }
+
+  assert {
+    condition     = aws_sns_topic_subscription.email[0].endpoint == "alerts@example.com"
+    error_message = "The SNS subscription endpoint must be var.alert_email."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.status_check[0].metric_name == "StatusCheckFailed"
+    error_message = "The alarm must watch the StatusCheckFailed metric."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.status_check[0].namespace == "AWS/EC2"
+    error_message = "The alarm must use the AWS/EC2 namespace."
+  }
+
+  assert {
+    condition     = startswith(aws_sns_topic.alerts[0].name, var.name)
+    error_message = "The SNS topic name must start with var.name."
+  }
+
+  assert {
+    condition     = startswith(aws_cloudwatch_metric_alarm.status_check[0].alarm_name, var.name)
+    error_message = "The alarm name must start with var.name."
+  }
+
+  assert {
+    condition     = aws_sns_topic.alerts[0].kms_master_key_id == "alias/aws/sns"
+    error_message = "The SNS topic must be encrypted with the AWS-managed key (alias/aws/sns)."
+  }
+}
+
+run "rejects_invalid_alert_email" {
+  command = plan
+
+  variables {
+    alert_email = "not-an-email"
+  }
+
+  expect_failures = [var.alert_email]
+}
