@@ -41,11 +41,12 @@ flowchart LR
     consumer -->|module call| est & glob
     est -->|ping, DNS| ee
     glob -->|ping, DNS| world
-    admin -->|"HTTP :80 only, shell via SSM"| est & glob
+    admin -->|"HTTP :80 only"| est & glob
 ```
 
 Each probe has its own security group (port 80 from the admin IP only, no
-SSH), IAM role for SSM Session Manager, and encrypted root volume.
+SSH) and encrypted root volume. It is configured entirely at boot, so it has no
+shell access and no IAM role.
 
 ## Layout
 
@@ -57,7 +58,6 @@ LAB3/
 ├── modules/smokeping-probe/  # the module
 │   ├── main.tf               # AMI lookup, EC2 instance
 │   ├── security_group.tf     # port 80 from allowed_web_cidrs, egress
-│   ├── iam.tf                # SSM-only instance role and profile
 │   ├── variables.tf          # inputs + validation
 │   ├── outputs.tf
 │   ├── versions.tf
@@ -86,7 +86,7 @@ Full details (types, defaults, validation, outputs) are in the
 | `instance_type` | EC2 type, default `t3.micro` |
 | `ami_id` | Pin an AMI; default `null` looks up the latest Ubuntu 24.04 |
 | `timezone` | Time zone for graph timestamps, default `Europe/Tallinn` |
-| `tags` | Extra tags merged into every resource (except the instance profile) |
+| `tags` | Extra tags merged into every resource |
 
 **Open–closed principle.** `targets` is the single extension point: the module
 is open for extension (a new target is a new list item in the consumer) and
@@ -95,9 +95,10 @@ closed for modification (the module code never changes for it).
 **Fixed conventions** that consumers can't change, so they can't get them wrong:
 
 - IMDSv2 only; encrypted `gp3` root volume.
-- No key pair and no port 22: the only shell is SSM Session Manager.
+- No shell access: no key pair, no port 22, no IAM role; the probe is configured
+  entirely at boot.
 - Web UI restricted to `allowed_web_cidrs`.
-- Names derived from `name` (`<name>-sg`, `<name>-role`, `<name>-profile`), so a
+- Names derived from `name` (`<name>-sg` and the instance `Name` tag), so a
   unique `name` is all that's needed to avoid collisions.
 
 ## Quality gates (CI)
@@ -153,13 +154,14 @@ same repository.
 |---|---|---|
 | `lab3-v1.0.0` | First release | major (first stable interface) |
 | `lab3-v1.0.1` | Instance profile no longer tagged: the student account denies `iam:TagInstanceProfile`, so 1.0.0 failed to apply | patch (bug fix, same interface) |
+| `lab3-v2.0.0` | IAM role / instance profile / SSM and `iam_role_name` output removed: the student account denies managing instance profiles, and the probe never needed AWS access | major (output removed, no shell) |
 
 ## Consuming and upgrading
 
 `infra/` pins the module to a tag, never a branch:
 
 ```hcl
-source = "git::https://github.com/KarlErikOol/ICA0024.git//LAB3/modules/smokeping-probe?ref=lab3-v1.0.0"
+source = "git::https://github.com/KarlErikOol/ICA0024.git//LAB3/modules/smokeping-probe?ref=lab3-v2.0.0"
 ```
 
 With "latest" (a branch), the module author can break your infrastructure with
@@ -181,7 +183,6 @@ Prerequisites (Linux or macOS shell; on Windows use WSL):
 - **AWS CLI v2**: [install guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html),
   logged in to the shared course account, e.g.
   `export AWS_PROFILE=taltech && aws sso login`, then check with `aws sts get-caller-identity`.
-- **Session Manager plugin** for shell access: [install guide](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
 
 Deploy both probes (detects your public IP for `admin_cidr`, shows the plan,
 asks for "yes"; add `-auto-approve` to skip):
@@ -195,10 +196,11 @@ Open `estonia_url` and `global_url` in a browser. Smokeping measures in
 5-minute rounds, so the graphs need a few rounds to show anything: **deploy at
 least 30 minutes before a demo.**
 
-Shell on a probe:
+There is no shell on the probes. If a UI doesn't come up, read the boot
+(cloud-init / user_data) log:
 
 ```sh
-aws ssm start-session --target <instance id> --region eu-north-1
+aws ec2 get-console-output --instance-id <instance id> --latest --region eu-north-1 --output text
 ```
 
 Tear down and verify nothing is left:
@@ -206,18 +208,25 @@ Tear down and verify nothing is left:
 ```sh
 ./scripts/destroy.sh
 aws resourcegroupstaggingapi get-resources --tag-filters Key=Owner,Values=karool --region eu-north-1
-aws iam list-roles --query "Roles[?starts_with(RoleName, 'karool-lab3')].RoleName"
+aws ec2 describe-security-groups --filters 'Name=group-name,Values=karool-lab3-*' --query 'SecurityGroups[].GroupName' --region eu-north-1
 ```
 
-Both lists should be empty (IAM is global, so roles don't show up in the
-regional tagging query).
+Both lists should be empty.
 
 ## Design notes
 
 - **Safe in a shared account.** The TalTech AWS account is shared with other
   students, so every name starts with `karool-` and every resource is tagged
-  `Owner` and `Project`. The one exception is the instance profile, which is
-  name-only because the account denies `iam:TagInstanceProfile` (fixed in 1.0.1).
+  `Owner` and `Project`.
+- **IAM in the student account.** Up to 1.0.1 the module created an IAM role and
+  instance profile so a person could get a shell through SSM Session Manager.
+  The shared account denies managing instance profiles: 1.0.0 failed on
+  `iam:TagInstanceProfile`, 1.0.1 (profile untagged) on `iam:GetInstanceProfile`.
+  The probe never needed it, since user_data configures everything at first
+  boot, so 2.0.0 removes IAM entirely. Two empty instance profiles,
+  `karool-lab3-estonia-profile` and `karool-lab3-global-profile`, are left over
+  because `iam:DeleteInstanceProfile` is denied too; they are not in Terraform
+  state, cost nothing, and only the account admin can remove them.
 - **AMI lookup in the module.** AMI IDs differ per region and change with every
   Ubuntu release, so a hard-coded ID would break elsewhere and go stale. Later
   AMI changes are ignored, so a new Ubuntu image never replaces a running probe

@@ -5,13 +5,14 @@ running the [linuxserver/smokeping](https://docs.linuxserver.io/images/docker-sm
 container, pinned to `lscr.io/linuxserver/smokeping:2.9.0-r0-ls190`. The
 instance measures latency to a configurable list of targets with the FPing
 (ICMP) and DNS probes. The web UI listens on port 80 and accepts traffic only
-from the CIDRs you allow. The only way to get a shell is SSM Session Manager.
+from the CIDRs you allow. The probe is configured entirely at boot, so it has
+no shell access and needs no AWS API access.
 
 ## Usage
 
 ```hcl
 module "probe_estonia" {
-  source            = "git::https://github.com/KarlErikOol/ICA0024.git//LAB3/modules/smokeping-probe?ref=lab3-v1.0.0"
+  source            = "git::https://github.com/KarlErikOol/ICA0024.git//LAB3/modules/smokeping-probe?ref=lab3-v2.0.0"
   name              = "karool-lab3-estonia"
   allowed_web_cidrs = ["203.0.113.10/32"]
   targets = [
@@ -31,7 +32,7 @@ the caller's AWS provider, in that region's default VPC and default subnet.
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| `name` | `string` | required | Prefix for every resource name, e.g. `karool-lab3-estonia`. Also the IAM role name, so it must be unique in the AWS account. 3–40 characters: lowercase letters, digits and hyphens. |
+| `name` | `string` | required | Prefix for every resource name, e.g. `karool-lab3-estonia`. Must be unique in the AWS account and region. 3–40 characters: lowercase letters, digits and hyphens. |
 | `targets` | `list(object)`, see below | required | Hosts to measure. At least one. Names must be unique. |
 | `allowed_web_cidrs` | `list(string)` | required | IPv4 CIDRs allowed to open the web UI on port 80. At least one, and each must be a valid CIDR (e.g. `203.0.113.10/32`). There is no default, so the UI is never public by accident. |
 | `instance_type` | `string` | `"t3.micro"` | EC2 instance type for the probe. |
@@ -52,11 +53,10 @@ Fields of each `targets` item:
 
 | Name | Description |
 |---|---|
-| `instance_id` | ID of the probe instance, e.g. for `aws ssm start-session`. |
+| `instance_id` | ID of the probe instance, e.g. for `aws ec2 get-console-output`. |
 | `public_ip` | Public IP of the probe instance. |
 | `url` | Smokeping web UI (`http://<public_ip>/smokeping/smokeping.cgi`), reachable only from `allowed_web_cidrs`. |
 | `security_group_id` | ID of the probe's security group. |
-| `iam_role_name` | Name of the probe's IAM role. |
 | `targets_config` | The rendered Smokeping `Targets` file. Lets you review the generated config in `terraform plan` and in tests. |
 
 ## Fixed conventions
@@ -66,18 +66,14 @@ Consumers can't change these, so they can't get them wrong:
 - **IMDSv2 only.** `http_tokens = "required"` on the instance metadata service.
 - **Encrypted disk.** The root volume is 10 GB `gp3` with `encrypted = true`, and
   the instance is `ebs_optimized`.
-- **No SSH.** There is no key pair and no port 22. The only shell is SSM Session
-  Manager, through an instance role that has only the
-  `AmazonSSMManagedInstanceCore` managed policy.
+- **No shell access.** No key pair, no port 22, no IAM role; the probe is
+  configured entirely at boot.
 - **Self-restarting container.** The container runs with `--restart unless-stopped`,
   so it comes back after a reboot or a crash.
-- **Names derived from `name`.** The security group is `<name>-sg`, the IAM role
-  `<name>-role` and the instance profile `<name>-profile`. The instance and its
-  volume are tagged `Name = <name>`. In a shared AWS account, a unique `name`
+- **Names derived from `name`.** The security group is `<name>-sg`, and the
+  instance and its volume are tagged `Name = <name>`. In a shared AWS account, a unique `name`
   per student and per probe is all you need to avoid collisions.
-- **Tags.** Every resource gets `var.tags` merged with `Module = "smokeping-probe"`,
-  except the instance profile. Tagging that needs `iam:TagInstanceProfile`,
-  which restricted accounts deny, so it is identified by its name instead.
+- **Tags.** Every resource gets `var.tags` merged with `Module = "smokeping-probe"`.
 
 ## Adding a target
 
@@ -100,14 +96,15 @@ public IP, and the graph history starts again from zero.
 
 - **Web UI:** open the `url` output in a browser from an address in
   `allowed_web_cidrs`. The first graphs appear a few minutes after boot.
-- **Shell:**
+- **Boot log:** there is no shell on the probe. To see what user_data did at
+  first boot (the cloud-init log), read the instance's console output:
 
   ```sh
-  aws ssm start-session --target <instance_id> --region eu-north-1
+  aws ec2 get-console-output --instance-id <instance_id> --latest --region eu-north-1 --output text
   ```
 
-  Use the region your provider deploys to. This needs the AWS CLI with the
-  Session Manager plugin.
+  Use the region your provider deploys to. This needs only the AWS CLI. The
+  web UI itself is the proof that the probe works.
 
 ## Requirements
 
