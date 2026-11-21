@@ -75,4 +75,11 @@ resource "aws_instance" "probe" {
   }
 
   tags = merge(local.tags, { Name = var.name })
+
+  # The AMI lookup returns a newer image whenever Canonical publishes one.
+  # Without this, the next apply would replace the probe and its graph
+  # history. Roll to a new image on purpose with `terraform apply -replace`.
+  lifecycle {
+    ignore_changes = [ami]
+  }
 }
