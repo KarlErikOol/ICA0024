@@ -1,0 +1,86 @@
+# Lab 3 checks for the smokeping-probe module (and the infra/ consumer).
+# Needs no AWS credentials: nothing is planned or applied, and the module
+# tests use a mocked AWS provider. Run the same checks locally with
+# LAB3/scripts/check.sh.
+name: lab3-ci
+
+on:
+  push:
+    paths: ['LAB3/**', '.github/workflows/lab3-*.yml']
+  pull_request:
+    paths: ['LAB3/**', '.github/workflows/lab3-*.yml']
+  # Reused by the release workflow (uses: ./.github/workflows/lab3-ci.yml),
+  # so a release is only tagged after these checks pass.
+  workflow_call:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: LAB3
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.17.0" # latest 1.17.x, same as local dev
+          terraform_wrapper: false
+
+      # Style: formatting drift.
+      - name: terraform fmt
+        run: terraform fmt -check -recursive
+
+      # Syntax and types: references, argument names, variable types.
+      - name: Validate module
+        run: |
+          terraform -chdir=modules/smokeping-probe init -backend=false -input=false
+          terraform -chdir=modules/smokeping-probe validate
+
+      # infra/ downloads the module from its pinned git tag, so this also
+      # proves the published release is usable.
+      - name: Validate infra
+        run: |
+          if [ -d infra ]; then
+            terraform -chdir=infra init -backend=false -input=false
+            terraform -chdir=infra validate
+          else
+            echo "infra/ not added yet"
+          fi
+
+      # Provider mistakes: invalid instance types, deprecated syntax,
+      # unused declarations (see modules/smokeping-probe/.tflint.hcl).
+      - name: Set up TFLint
+        uses: terraform-linters/setup-tflint@v6
+
+      - name: tflint
+        working-directory: LAB3/modules/smokeping-probe
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # avoids GitHub API rate limits when downloading plugins
+        run: |
+          tflint --init
+          tflint
+
+      # Security policy: open ingress, unencrypted disks, IMDSv1, ...
+      # `uses:` steps ignore defaults.run.working-directory, hence the full path.
+      # soft_fail is left unset, so any finding fails the job (setting it to
+      # "false" would also fail, but turns the annotations into warnings).
+      - name: checkov
+        uses: bridgecrewio/checkov-action@v12.3142.0
+        with:
+          directory: LAB3/modules/smokeping-probe
+          framework: terraform
+          quiet: true
+          compact: true
+          output_format: cli
+
+      # Module behaviour: tests/*.tftest.hcl against a mocked AWS provider.
+      # Uses the init from "Validate module".
+      - name: terraform test
+        run: terraform -chdir=modules/smokeping-probe test
