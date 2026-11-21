@@ -267,8 +267,15 @@ run "module_tags_applied" {
   }
 
   assert {
-    condition     = aws_security_group.probe.tags["Owner"] == "karool" && aws_iam_role.probe.tags["Owner"] == "karool" && aws_iam_instance_profile.probe.tags["Owner"] == "karool"
-    error_message = "The security group, IAM role and instance profile must carry the caller's tags."
+    condition     = aws_security_group.probe.tags["Owner"] == "karool" && aws_iam_role.probe.tags["Owner"] == "karool"
+    error_message = "The security group and IAM role must carry the caller's tags."
+  }
+
+  # Regression test for 1.0.1: tagging the instance profile needs
+  # iam:TagInstanceProfile, which the shared student account denies.
+  assert {
+    condition     = aws_iam_instance_profile.probe.tags == null
+    error_message = "The instance profile must stay untagged (iam:TagInstanceProfile is denied in restricted accounts)."
   }
 
   assert {

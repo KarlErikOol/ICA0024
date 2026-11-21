@@ -22,9 +22,10 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Deliberately untagged: tagging needs iam:TagInstanceProfile, which restricted
+# accounts (such as the shared TalTech student account) deny, failing the whole
+# create. The name still carries the prefix, and the role it wraps is tagged.
 resource "aws_iam_instance_profile" "probe" {
   name = "${var.name}-profile"
   role = aws_iam_role.probe.name
-
-  tags = merge(local.tags, { Name = "${var.name}-profile" })
 }
