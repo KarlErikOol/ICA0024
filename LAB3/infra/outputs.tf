@@ -9,11 +9,11 @@ output "global_url" {
 }
 
 output "estonia_instance_id" {
-  description = "Shell: aws ssm start-session --target <id> --region eu-north-1"
+  description = "Instance ID; boot log: aws ec2 get-console-output --instance-id <id> --latest --region eu-north-1"
   value       = module.probe_estonia.instance_id
 }
 
 output "global_instance_id" {
-  description = "Shell: aws ssm start-session --target <id> --region eu-north-1"
+  description = "Instance ID; boot log: aws ec2 get-console-output --instance-id <id> --latest --region eu-north-1"
   value       = module.probe_global.instance_id
 }

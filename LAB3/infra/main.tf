@@ -20,7 +20,7 @@ locals {
 
 # A module source must be a literal, so the ref is repeated: bump both together.
 module "probe_estonia" {
-  source = "git::https://github.com/KarlErikOol/ICA0024.git//LAB3/modules/smokeping-probe?ref=lab3-v1.0.1"
+  source = "git::https://github.com/KarlErikOol/ICA0024.git//LAB3/modules/smokeping-probe?ref=lab3-v2.0.0"
 
   name              = "karool-lab3-estonia"
   targets           = var.estonia_targets
@@ -29,7 +29,7 @@ module "probe_estonia" {
 }
 
 module "probe_global" {
-  source = "git::https://github.com/KarlErikOol/ICA0024.git//LAB3/modules/smokeping-probe?ref=lab3-v1.0.1"
+  source = "git::https://github.com/KarlErikOol/ICA0024.git//LAB3/modules/smokeping-probe?ref=lab3-v2.0.0"
 
   name              = "karool-lab3-global"
   targets           = var.global_targets
