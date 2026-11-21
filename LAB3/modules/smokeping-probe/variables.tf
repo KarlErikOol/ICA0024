@@ -87,3 +87,14 @@ variable "tags" {
   description = "Extra tags merged into every resource."
   default     = {}
 }
+
+variable "alert_email" {
+  type        = string
+  description = "Email address to notify when the instance fails its EC2 status checks. null (default) disables alerting: no SNS topic, subscription or alarm is created. AWS sends a confirmation email first; alerts only arrive after it is confirmed."
+  default     = null
+
+  validation {
+    condition     = var.alert_email == null || can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.alert_email))
+    error_message = "alert_email must be null or an email address like alerts@example.com."
+  }
+}

@@ -22,3 +22,8 @@ output "targets_config" {
   description = "Rendered Smokeping Targets file."
   value       = local.targets_config
 }
+
+output "alert_topic_arn" {
+  description = "ARN of the alerts SNS topic, or null when alert_email is null."
+  value       = one(aws_sns_topic.alerts[*].arn)
+}
