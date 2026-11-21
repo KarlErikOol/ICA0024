@@ -1,0 +1,162 @@
+# Lab 3 release workflow for the smokeping-probe Terraform module.
+#
+# Usage (manual only):
+#   GitHub UI: Actions -> lab3-release -> Run workflow -> choose bump (patch|minor|major)
+#   CLI:       gh workflow run lab3-release.yml -f bump=minor
+#
+# What it does:
+#   1. Re-runs the full Lab 3 CI (reusable workflow) on this commit; no release unless it passes.
+#   2. Computes the next semantic version from the latest `lab3-v*` tag
+#      (tags are repo-wide, so Lab 3 releases use the `lab3-` prefix).
+#   3. Takes the release notes from LAB3/modules/smokeping-probe/CHANGELOG.md
+#      (section `## [X.Y.Z] - YYYY-MM-DD`) and fails if that section is missing/empty,
+#      so the changelog must be updated BEFORE releasing.
+#   4. Creates and pushes an annotated tag `lab3-vX.Y.Z` and a GitHub release.
+
+name: lab3-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semantic version part to bump"
+        type: choice
+        required: true
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+
+# Never run two releases at the same time (they would compute the same tag).
+concurrency:
+  group: lab3-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Gate: all Lab 3 checks must pass on this exact commit before anything is released.
+  ci:
+    uses: ./.github/workflows/lab3-ci.yml
+
+  release:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the tag and create the release
+    env:
+      CHANGELOG: LAB3/modules/smokeping-probe/CHANGELOG.md
+    steps:
+      # Full history + all tags are needed to find the latest lab3-v* tag.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Compute the new version from the latest lab3-v* tag and the requested bump.
+      # The input is passed through env (BUMP) instead of interpolating
+      # ${{ inputs.bump }} into the script body, which avoids script injection.
+      - name: Compute version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+
+          latest="$(git tag -l 'lab3-v*' --sort=-v:refname | head -n1)"
+          if [ -z "$latest" ]; then
+            latest="lab3-v0.0.0"
+          fi
+
+          current="${latest#lab3-v}"
+          if ! [[ "$current" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Latest tag '$latest' is not of the form lab3-vX.Y.Z"
+            exit 1
+          fi
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+
+          case "$BUMP" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+            *) echo "::error::Invalid bump '$BUMP' (expected patch, minor or major)"; exit 1 ;;
+          esac
+
+          version="${major}.${minor}.${patch}"
+          tag="lab3-v${version}"
+
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "::error::Tag '${tag}' already exists"
+            exit 1
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "${latest} -> ${tag} (bump: ${BUMP})"
+
+      # Extract the `## [X.Y.Z]` section of the module CHANGELOG (header excluded,
+      # up to the next `## [` header). Fails if the section is missing or empty.
+      - name: Extract release notes
+        id: notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [ ! -f "$CHANGELOG" ]; then
+            echo "::error::Changelog '$CHANGELOG' not found"
+            exit 1
+          fi
+
+          notes_file="${RUNNER_TEMP}/release-notes.md"
+          awk -v hdr="## [${VERSION}]" '
+            index($0, hdr) == 1 { found = 1; next }
+            found && /^## \[/   { exit }
+            found               { print }
+          ' "$CHANGELOG" > "$notes_file"
+
+          if ! grep -qF "## [${VERSION}]" "$CHANGELOG"; then
+            echo "::error::No '## [${VERSION}]' section in $CHANGELOG - update the changelog before releasing"
+            exit 1
+          fi
+          if ! grep -q '[^[:space:]]' "$notes_file"; then
+            echo "::error::Section '## [${VERSION}]' in $CHANGELOG is empty - add release notes before releasing"
+            exit 1
+          fi
+
+          echo "file=${notes_file}" >> "$GITHUB_OUTPUT"
+          echo "Release notes for ${VERSION}:"
+          cat "$notes_file"
+
+      # Create an annotated tag in the name of whoever started the release and
+      # push only that tag.
+      - name: Tag and push
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+          ACTOR: ${{ github.actor }}
+          ACTOR_ID: ${{ github.actor_id }}
+        run: |
+          set -euo pipefail
+          git config user.name "$ACTOR"
+          git config user.email "${ACTOR_ID}+${ACTOR}@users.noreply.github.com"
+          git tag -a "$TAG" -m "Lab 3 module $VERSION"
+          git push origin "$TAG"
+
+      # Publish the GitHub release for the pushed tag, using the changelog section as notes.
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+          NOTES_FILE: ${{ steps.notes.outputs.file }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            --title "smokeping-probe $VERSION" \
+            --notes-file "$NOTES_FILE" \
+            --verify-tag
