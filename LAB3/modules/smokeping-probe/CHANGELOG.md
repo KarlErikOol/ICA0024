@@ -5,6 +5,15 @@ All notable changes to the `smokeping-probe` module. The format follows
 [Semantic Versioning](https://semver.org/), and each version is released as the
 git tag `lab3-vX.Y.Z`.
 
+## [1.0.1] - 2026-11-21
+
+### Fixed
+
+- The instance profile is no longer tagged. Tagging it needs
+  `iam:TagInstanceProfile`, which the shared TalTech student account denies, so
+  `lab3-v1.0.0` failed to apply there with `AccessDenied`. The profile keeps its
+  `<name>-profile` name, and the IAM role it wraps is still tagged.
+
 ## [1.0.0] - 2026-11-21
 
 ### Added
