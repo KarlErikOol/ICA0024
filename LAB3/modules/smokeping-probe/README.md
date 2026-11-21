@@ -19,6 +19,7 @@ module "probe_estonia" {
     { name = "taltech", host = "www.taltech.ee" },
     { name = "dns_cloudflare", host = "1.1.1.1", probe = "DNS", lookup = "taltech.ee" },
   ]
+  # alert_email = "you@example.com" # optional, see Alerts
 }
 ```
 
@@ -39,6 +40,7 @@ the caller's AWS provider, in that region's default VPC and default subnet.
 | `ami_id` | `string` | `null` | AMI for the probe. `null` uses the latest Canonical Ubuntu 24.04 (amd64) in the provider's region. If set, it must look like `ami-0123456789abcdef0`. |
 | `timezone` | `string` | `"Europe/Tallinn"` | Time zone (`TZ`) of the Smokeping container, used for graph timestamps. |
 | `tags` | `map(string)` | `{}` | Extra tags merged into every resource. |
+| `alert_email` | `string` | `null` | Email address that gets an alert when the instance fails its EC2 status checks. `null` turns alerting off. If set, it must look like an email address. See [Alerts](#alerts). |
 
 Fields of each `targets` item:
 
@@ -58,6 +60,7 @@ Fields of each `targets` item:
 | `url` | Smokeping web UI (`http://<public_ip>/smokeping/smokeping.cgi`), reachable only from `allowed_web_cidrs`. |
 | `security_group_id` | ID of the probe's security group. |
 | `targets_config` | The rendered Smokeping `Targets` file. Lets you review the generated config in `terraform plan` and in tests. |
+| `alert_topic_arn` | ARN of the alerts SNS topic, or `null` when `alert_email` is not set. |
 
 ## Fixed conventions
 
@@ -73,7 +76,8 @@ Consumers can't change these, so they can't get them wrong:
 - **Names derived from `name`.** The security group is `<name>-sg`, and the
   instance and its volume are tagged `Name = <name>`. In a shared AWS account, a unique `name`
   per student and per probe is all you need to avoid collisions.
-- **Tags.** Every resource gets `var.tags` merged with `Module = "smokeping-probe"`.
+- **Tags.** Every resource that supports tags gets `var.tags` merged with
+  `Module = "smokeping-probe"` (an SNS subscription can't be tagged).
 
 ## Adding a target
 
@@ -105,6 +109,25 @@ public IP, and the graph history starts again from zero.
 
   Use the region your provider deploys to. This needs only the AWS CLI. The
   web UI itself is the proof that the probe works.
+
+## Alerts
+
+Alerting is off by default. Set `alert_email` to get an email when the probe
+instance fails its EC2 status checks (the instance or the host it runs on is
+unhealthy). The module then creates:
+
+- an SNS topic `<name>-alerts`, encrypted with the AWS-managed key
+  `alias/aws/sns`;
+- an email subscription to `alert_email`;
+- a CloudWatch alarm `<name>-status-check` on `AWS/EC2` `StatusCheckFailed` for
+  the probe instance. It goes to ALARM after 3 failed one-minute checks in a row
+  and notifies the topic, and notifies again when the instance is OK.
+
+AWS first sends a confirmation email to `alert_email`. Alerts arrive only after
+you click the link in it; until then the subscription stays pending and
+`terraform apply` still succeeds. Basic monitoring is enough: EC2 reports
+status checks every minute at no extra cost, so detailed monitoring stays off.
+The `alert_topic_arn` output is `null` when alerting is off.
 
 ## Requirements
 
